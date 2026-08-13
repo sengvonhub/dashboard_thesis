@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================
+   COLOR TOKENS — converted from `Pallets` (Flutter/Dart) class
+   ARGB hex (0xAARRGGBB) -> CSS hex (#RRGGBB / #RRGGBBAA)
+   ============================================================= */
+
+:root {
+  /* ---------- Brand (theme-invariant) ---------- */
+  --color-blurple: #7C6FF7;
+  --color-blurple-dim: #5A52D5;
+  --color-purple-start: #6D28D9;
+  --color-purple-end: #4338CA;
+  --gradient-brand: linear-gradient(135deg, #6D28D9 0%, #7C6FF7 50%, #4338CA 100%);
+
+  /* ---------- Semantic (theme-invariant) ---------- */
+  --color-error: #F87171;
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
+  --color-info: #7C6FF7;
+  --color-inactive: #64748B;
+
+  /* ---------- Semantic Tints (~15% alpha) ---------- */
+  --color-error-tint: #F8717126;
+  --color-success-tint: #34D39926;
+  --color-warning-tint: #FBBF2426;
+  --color-info-tint: #7C6FF726;
+
+  /* ---------- Overlays ---------- */
+  --color-scrim: #00000099;
+  --color-transparent: #00000000;
+  --color-inactive-seek: #FFFFFF3D;
+
+  /* ---------- On-color (theme-invariant) ---------- */
+  --color-on-accent: #FFFFFF;
+  --color-on-error: #FFFFFF;
+  --color-on-success: #0F1117;
+  --color-on-warning: #0F1117;
+
+  /* ---------- Aliases kept for older call sites ---------- */
+  /* These used to hold fixed dark values because card surfaces never changed
+     with the theme. Card surfaces are now theme-aware (see below), so these
+     simply track the regular text tokens and stay correct in both themes. */
+  --color-card-text-primary: var(--color-text-primary);
+  --color-card-text-secondary: var(--color-text-secondary);
+  --color-card-border: var(--color-border);
+
+  /* `--color-danger` is the name several components reach for. */
+  --color-danger: var(--color-error);
+
+  /* ---------- text-muted stays the same in both themes ---------- */
+  --color-text-muted: #64748B;
+}
+
+/* =============================================================
+   THEMES
+
+   Card / elevated / overlay surfaces are part of the theme. They were
+   previously pinned to dark values in every theme, which made light mode
+   unreadable: a card painted #1C2333 still received --color-text-primary,
+   and in light mode that token is #0F1117 — near-black text on a dark navy
+   card. Both themes now supply their own surface ramp.
+
+   Each theme is selectable two ways so the server-rendered `data-theme`
+   attribute on <html> and the client-applied class agree with one another.
+   ============================================================= */
+
+/* Default to dark until the toggle runs on mount. */
+:root,
+.dark,
+[data-theme="dark"] {
+  --color-bg: #0D1117;
+  --color-surface: #161B27;
+  --color-surface-card: #1C2333;
+  --color-surface-elevated: #212840;
+  --color-surface-overlay: #1A2035;
+  --color-border: #2A3350;
+  --color-text-primary: #E8ECF4;
+  --color-text-secondary: #8892B0;
+  --color-divider: #1E2A42;
+  /* Makes scrollbars and native form controls follow the theme. */
+  color-scheme: dark;
+}
+
+.light,
+[data-theme="light"] {
+  --color-bg: #F0F2F5;
+  --color-surface: #FFFFFF;
+  --color-surface-card: #FFFFFF;
+  --color-surface-elevated: #F7F8FB;
+  --color-surface-overlay: #FFFFFF;
+  --color-border: #E0E4EF;
+  --color-text-primary: #0F1117;
+  --color-text-secondary: #5A6480;
+  --color-divider: #E4E8F0;
+  color-scheme: light;
+}
+
+/* =============================================================
+   BASE STYLES (yours, unchanged)
+   ============================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root,
+.app {
+  height: 100%;
+  width: 100%;
+  @apply text-sm;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+@media (min-width: 768px) {
+  .custom-grid-rows {
+    grid-template-rows: repeat(8, 20vh);
+  }
+}
+
+@media (min-width: 1280px) {
+  .custom-grid-rows {
+    grid-template-rows: repeat(8, 7.5vh);
+  }
+}

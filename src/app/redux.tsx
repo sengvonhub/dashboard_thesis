@@ -82,10 +82,7 @@ export type AppDispatch = AppStore["dispatch"];
 export const useAppDispatch = () => useDispatch<AppDispatch>();
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
 
-/* PERSISTOR HANDLE */
-// The persistor lives in a ref inside the provider, so nothing outside the
-// React tree can reach it. Logout needs to flush the cleared auth state to
-// storage before navigating away, so keep a module-level handle to it too.
+
 let appPersistor: ReturnType<typeof persistStore> | undefined;
 
 export const getPersistor = () => appPersistor;

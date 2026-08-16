@@ -21,6 +21,7 @@ export const registerCompanySchema = z
     email: z.string().email(),
     phone: z.string().max(50).optional().or(z.literal("")),
     address: z.string().optional().or(z.literal("")),
+    max_users: z.number().int().positive().optional(),  
     admin_full_name: z.string().min(2, "Full name is required"),
     admin_username: z.string().min(3, "Username must be at least 3 characters"),
     admin_password: z.string().min(8, "Password must be at least 8 characters"),

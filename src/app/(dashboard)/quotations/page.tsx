@@ -40,9 +40,17 @@ import type {
   QuotationItemCreate,
   QuotationResponse,
 } from "@/state/types/quotation";
+import { useConfirm } from "@/app/(components)/crud/confirm";
 
-interface DraftItem extends QuotationItemCreate {
+// quantity/unit_price are kept as raw strings while editing, not numbers —
+// a controlled input that round-trips every keystroke through Number()
+// strips a trailing "." before the user can type digits after it, making
+// decimal entry impossible. Converted to numbers only at submit time below.
+interface DraftItem extends Omit<QuotationItemCreate, "quantity" | "unit_price" | "pages"> {
   key: number;
+  quantity: string;
+  unit_price: string;
+  pages: string;
 }
 
 const newItem = (sortOrder: number): DraftItem => ({
@@ -50,12 +58,14 @@ const newItem = (sortOrder: number): DraftItem => ({
   sort_order: sortOrder,
   item_name: "",
   size: "",
-  pages: null,
+  pages: "",
   print_side: "",
   color_spec: "",
+  paper_cover: "",
+  paper_inside: "",
   finishing: "",
-  quantity: 1,
-  unit_price: 0,
+  quantity: "1",
+  unit_price: "0",
 });
 
 /** List-level export columns. */
@@ -74,6 +84,7 @@ const LIST_COLUMNS: ExportColumn<QuotationResponse>[] = [
 ];
 
 export default function QuotationsPage() {
+  const confirm = useConfirm();
   const [statusFilter, setStatusFilter] = useState("");
   const args = useMemo(
     () => (statusFilter ? { status: statusFilter } : {}),
@@ -177,7 +188,12 @@ export default function QuotationsPage() {
   };
 
   const onDelete = async (q: QuotationResponse) => {
-    if (!window.confirm(`Delete quotation ${q.ref_number}?`)) return;
+    const ok = await confirm({
+      title: `Delete quotation ${q.ref_number}`,
+      message: "The quotation and its line items will be removed.",
+      confirmLabel: "Delete quotation",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteQuotation(q.quotation_id).unwrap();
@@ -513,17 +529,17 @@ export default function QuotationsPage() {
                   <div className="col-span-6 sm:col-span-2">
                     <TextField
                       label="Qty"
-                      value={String(it.quantity)}
+                      value={it.quantity}
                       inputMode="numeric"
-                      onChange={(v) => setItem(it.key, { quantity: Number(v) || 0 })}
+                      onChange={(v) => setItem(it.key, { quantity: v })}
                     />
                   </div>
                   <div className="col-span-8 sm:col-span-2">
                     <TextField
                       label="Unit price"
-                      value={String(it.unit_price)}
+                      value={it.unit_price}
                       inputMode="decimal"
-                      onChange={(v) => setItem(it.key, { unit_price: Number(v) || 0 })}
+                      onChange={(v) => setItem(it.key, { unit_price: v })}
                     />
                   </div>
                   <div className="col-span-4 sm:col-span-1 flex items-end justify-end pb-1">
@@ -538,6 +554,50 @@ export default function QuotationsPage() {
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                  </div>
+
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Pages"
+                      value={it.pages}
+                      inputMode="numeric"
+                      onChange={(v) => setItem(it.key, { pages: v })}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Print side"
+                      value={it.print_side ?? ""}
+                      onChange={(v) => setItem(it.key, { print_side: v })}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Colour"
+                      value={it.color_spec ?? ""}
+                      onChange={(v) => setItem(it.key, { color_spec: v })}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Cover"
+                      value={it.paper_cover ?? ""}
+                      onChange={(v) => setItem(it.key, { paper_cover: v })}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Inside"
+                      value={it.paper_inside ?? ""}
+                      onChange={(v) => setItem(it.key, { paper_inside: v })}
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-2">
+                    <TextField
+                      label="Finishing"
+                      value={it.finishing ?? ""}
+                      onChange={(v) => setItem(it.key, { finishing: v })}
+                    />
                   </div>
                 </div>
               ))}

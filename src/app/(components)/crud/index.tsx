@@ -23,13 +23,19 @@ export function initialsOf(name: string): string {
 }
 
 /** Money-ish display for Decimal columns that arrive as strings. */
+/**
+ * Amounts carry the currency symbol, matching the mobile app. The API has no
+ * per-company currency on these payloads, so the symbol is fixed rather than
+ * looked up. Nothing parses this back into a number — pass the raw value to
+ * exporters when a numeric cell is needed.
+ */
 export function money(value: unknown): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return String(value ?? "—");
-  return n.toLocaleString(undefined, {
+  return `$${n.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  });
+  })}`;
 }
 
 // ── page chrome ──────────────────────────────────────────
@@ -127,20 +133,30 @@ export function EmptyState({ message }: { message: string }) {
 export function Card({
   children,
   className = "",
+  style,
+  onClick,
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Merged last, so a caller can override the accent border or background. */
+  style?: React.CSSProperties;
+  /** Renders as a <button> instead of a <div> when supplied. */
+  onClick?: () => void;
 }) {
+  const Wrapper = (onClick ? "button" : "div") as React.ElementType;
   return (
-    <div
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
       className={`rounded-2xl border ${className}`}
       style={{
         background: "var(--color-surface-card)",
         borderColor: "var(--color-border)",
+        ...style,
       }}
     >
       {children}
-    </div>
+    </Wrapper>
   );
 }
 
@@ -214,7 +230,7 @@ export function Dialog({
         </div>
 
         <form onSubmit={onSubmit} className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
             {children}
             {error && (
               <p className="text-xs" style={{ color: "var(--color-error)" }}>

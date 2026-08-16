@@ -5,10 +5,12 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Boxes,
+  BarChart3,
   Layers,
   Loader2,
   Package,
   Pencil,
+  Plus,
   Star,
   Trash2,
 } from "lucide-react";
@@ -24,12 +26,19 @@ import {
   apiMessage,
   money,
 } from "@/app/(components)/crud";
+import { useConfirm } from "@/app/(components)/crud/confirm";
+import ProductDetailDialog from "@/app/(components)/Inventory/ProductDetailDialog";
+import StockReport from "@/app/(components)/Inventory/StockReport";
+import VariantDetailDialog from "@/app/(components)/Inventory/VariantDetailDialog";
+import VariantDialog from "@/app/(components)/Inventory/VariantDialog";
 import {
   useAddProductImageMutation,
+  useDeleteVariantMutation,
   useCreateProductMutation,
   useCreateStockMovementMutation,
   useDeleteProductImageMutation,
   useDeleteProductMutation,
+  useDeleteStockMovementMutation,
   useGetCategoriesQuery,
   useGetProductsQuery,
   useGetStockMovementsQuery,
@@ -42,7 +51,7 @@ import type {
   ProductVariantResponse,
 } from "@/state/types/inventory";
 
-type Tab = "products" | "movements";
+type Tab = "products" | "movements" | "report";
 
 const MOVEMENT_TYPES: { value: MovementType; label: string }[] = [
   { value: "stock_in", label: "Stock in" },
@@ -58,6 +67,7 @@ const MOVEMENT_TYPES: { value: MovementType; label: string }[] = [
 ];
 
 export default function InventoryPage() {
+  const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>("products");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -78,6 +88,29 @@ export default function InventoryPage() {
   const [removeImage] = useDeleteProductImageMutation();
   const [createMovement, { isLoading: movementSaving }] =
     useCreateStockMovementMutation();
+  const [deleteMovement, { isLoading: movementDeleting }] =
+    useDeleteStockMovementMutation();
+  const [deleteVariant, { isLoading: variantDeleting }] =
+    useDeleteVariantMutation();
+
+  /**
+   * Which product/variant the variant dialog is open for, held as ids so the
+   * dialog re-reads live data after an image upload invalidates the products
+   * query — a stored object would stay a stale snapshot.
+   */
+  const [variantTarget, setVariantTarget] = useState<{
+    productId: number;
+    variantId: number | null;
+  } | null>(null);
+
+  /** Product whose detail sheet is open — also held by id, for the same reason. */
+  const [detailProductId, setDetailProductId] = useState<number | null>(null);
+
+  /** Variant whose stock ledger is open. */
+  const [ledgerVariant, setLedgerVariant] = useState<{
+    productId: number;
+    variantId: number;
+  } | null>(null);
 
   // ── product dialog ─────────────────────────────────────
   const [productOpen, setProductOpen] = useState(false);
@@ -133,6 +166,106 @@ export default function InventoryPage() {
   /** Flat variant list, for the movement dialog's variant picker. */
   const variantsOf = (productId: string): ProductVariantResponse[] =>
     products?.find((p) => String(p.product_id) === productId)?.variants ?? [];
+
+  /**
+   * variant_id → its product and SKU. Movements only carry `variant_id`, so
+   * this is what turns "Variant #12" into "120 IK (IK120-01)".
+   */
+  const variantIndex = useMemo(() => {
+    const m = new Map<
+      number,
+      { product: string; sku: string; productId: number }
+    >();
+    for (const p of products ?? []) {
+      for (const v of p.variants) {
+        m.set(v.variant_id, {
+          product: p.name,
+          sku: v.sku || `#${v.variant_id}`,
+          productId: p.product_id,
+        });
+      }
+    }
+    return m;
+  }, [products]);
+
+  const variantProduct = variantTarget
+    ? products?.find((p) => p.product_id === variantTarget.productId)
+    : undefined;
+  const variantEditing =
+    variantProduct && variantTarget?.variantId != null
+      ? variantProduct.variants.find(
+          (v) => v.variant_id === variantTarget.variantId
+        )
+      : null;
+
+  const detailProduct = detailProductId
+    ? products?.find((p) => p.product_id === detailProductId)
+    : undefined;
+
+  const ledgerProduct = ledgerVariant
+    ? products?.find((p) => p.product_id === ledgerVariant.productId)
+    : undefined;
+  const ledgerTarget = ledgerProduct?.variants.find(
+    (v) => v.variant_id === ledgerVariant?.variantId
+  );
+
+  /**
+   * Opens the movement dialog already pointed at one variant, so recording
+   * stock in/out from a variant skips re-picking the product and variant.
+   */
+  const openMovementFor = (
+    productId: number,
+    v: ProductVariantResponse,
+    direction: "in" | "out"
+  ) => {
+    setMovementError(null);
+    setMovementForm({
+      product_id: String(productId),
+      variant_id: String(v.variant_id),
+      movement_type: direction === "in" ? "stock_in" : "stock_out",
+      qty: "",
+      unit_price: v.price != null ? String(v.price) : "",
+      date: new Date().toISOString().slice(0, 10),
+    });
+    setMovementOpen(true);
+  };
+
+  const onDeleteVariant = async (
+    product: ProductResponse,
+    v: ProductVariantResponse
+  ) => {
+    const ok = await confirm({
+      title: "Delete variant",
+      message: `${v.sku || `#${v.variant_id}`} will be removed from “${product.name}”, along with its stock history.`,
+      confirmLabel: "Delete variant",
+    });
+    if (!ok) return;
+    setPageError(null);
+    try {
+      await deleteVariant({
+        productId: product.product_id,
+        variantId: v.variant_id,
+      }).unwrap();
+    } catch (err) {
+      setPageError(apiMessage(err, "Could not delete this variant."));
+    }
+  };
+
+  const onDeleteMovement = async (movementId: number) => {
+    const ok = await confirm({
+      title: "Delete movement",
+      message:
+        "The stock this movement added or removed is reversed on the variant.",
+      confirmLabel: "Delete movement",
+    });
+    if (!ok) return;
+    setPageError(null);
+    try {
+      await deleteMovement(movementId).unwrap();
+    } catch (err) {
+      setPageError(apiMessage(err, "Could not delete this movement."));
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -210,7 +343,12 @@ export default function InventoryPage() {
   };
 
   const onDeleteProduct = async (p: ProductResponse) => {
-    if (!window.confirm(`Delete “${p.name}” and all its images?`)) return;
+    const ok = await confirm({
+      title: `Delete ${p.name}`,
+      message: "The product, its variants and all its images will be removed.",
+      confirmLabel: "Delete product",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteProduct(p.product_id).unwrap();
@@ -232,15 +370,39 @@ export default function InventoryPage() {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "products", label: "Products", icon: Package },
     { id: "movements", label: "Stock movements", icon: Layers },
+    { id: "report", label: "Stock report", icon: BarChart3 },
   ];
+
+  // The report is read-only, so it gets no header action.
+  const headerAction =
+    tab === "products"
+      ? { label: "Add product", run: openCreate }
+      : tab === "movements"
+        ? {
+            label: "Record movement",
+            // Clear any prefill left by a variant's stock-in/out shortcut.
+            run: () => {
+              setMovementError(null);
+              setMovementForm({
+                product_id: "",
+                variant_id: "",
+                movement_type: "stock_in",
+                qty: "",
+                unit_price: "",
+                date: new Date().toISOString().slice(0, 10),
+              });
+              setMovementOpen(true);
+            },
+          }
+        : null;
 
   return (
     <div className="flex flex-col gap-4 pb-10">
       <CrudHeader
         title="Inventory"
         subtitle={`${products?.length ?? 0} products · ${totals.variants} variants · ${totals.units} units · ${money(totals.value)} value`}
-        actionLabel={tab === "products" ? "Add product" : "Record movement"}
-        onAction={tab === "products" ? openCreate : () => setMovementOpen(true)}
+        actionLabel={headerAction?.label}
+        onAction={headerAction?.run}
       />
 
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--color-divider)" }}>
@@ -351,10 +513,14 @@ export default function InventoryPage() {
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-2">
-                          <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => setDetailProductId(p.product_id)}
+                            className="min-w-0 flex-1 text-left"
+                          >
                             <p
                               className="text-sm font-semibold truncate"
-                              style={{ color: "var(--color-text-primary)" }}
+                              style={{ color: "var(--color-blurple)" }}
                             >
                               {p.name}
                             </p>
@@ -370,7 +536,7 @@ export default function InventoryPage() {
                                 .filter(Boolean)
                                 .join(" · ")}
                             </p>
-                          </div>
+                          </button>
 
                           <div className="flex gap-1 shrink-0">
                             <label
@@ -415,21 +581,40 @@ export default function InventoryPage() {
                         </div>
 
                         {/* variants */}
-                        {p.variants.length > 0 && (
-                          <div
-                            className="mt-3 rounded-xl border overflow-hidden"
-                            style={{ borderColor: "var(--color-border)" }}
-                          >
-                            {p.variants.map((v) => (
+                        <div
+                          className="mt-3 rounded-xl border overflow-hidden"
+                          style={{ borderColor: "var(--color-border)" }}
+                        >
+                          {p.variants.map((v) => {
+                            const cover =
+                              v.images.find((i) => i.is_primary) ?? v.images[0];
+                            return (
                               <div
                                 key={v.variant_id}
-                                className="flex items-center justify-between gap-3 px-3 py-2 border-b last:border-b-0"
+                                className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0"
                                 style={{ borderColor: "var(--color-divider)" }}
                               >
-                                <div className="min-w-0">
+                                {cover && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={cover.image_url}
+                                    alt=""
+                                    className="h-8 w-8 rounded-lg object-cover shrink-0"
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setLedgerVariant({
+                                      productId: p.product_id,
+                                      variantId: v.variant_id,
+                                    })
+                                  }
+                                  className="min-w-0 flex-1 text-left"
+                                >
                                   <p
                                     className="text-xs font-medium truncate"
-                                    style={{ color: "var(--color-text-primary)" }}
+                                    style={{ color: "var(--color-blurple)" }}
                                   >
                                     {v.sku || `Variant #${v.variant_id}`}
                                   </p>
@@ -443,7 +628,7 @@ export default function InventoryPage() {
                                         .join(" · ")}
                                     </p>
                                   )}
-                                </div>
+                                </button>
                                 <div className="text-right shrink-0">
                                   <p
                                     className="text-xs font-semibold"
@@ -463,10 +648,51 @@ export default function InventoryPage() {
                                     {v.stock_quantity} in stock
                                   </p>
                                 </div>
+                                <div className="flex gap-0.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setVariantTarget({
+                                        productId: p.product_id,
+                                        variantId: v.variant_id,
+                                      })
+                                    }
+                                    aria-label={`Edit variant ${v.sku || v.variant_id}`}
+                                    className="h-7 w-7 rounded-lg flex items-center justify-center"
+                                    style={{ color: "var(--color-text-muted)" }}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteVariant(p, v)}
+                                    disabled={variantDeleting}
+                                    aria-label={`Delete variant ${v.sku || v.variant_id}`}
+                                    className="h-7 w-7 rounded-lg flex items-center justify-center disabled:opacity-50"
+                                    style={{ color: "var(--color-error)" }}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                            );
+                          })}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setVariantTarget({
+                                productId: p.product_id,
+                                variantId: null,
+                              })
+                            }
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold"
+                            style={{ color: "var(--color-blurple)" }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            {p.variants.length ? "Add variant" : "Add the first variant"}
+                          </button>
+                        </div>
 
                         {/* image strip */}
                         {p.images.length > 0 && (
@@ -530,8 +756,17 @@ export default function InventoryPage() {
         </>
       )}
 
+      {/* ── STOCK REPORT ── */}
+      {tab === "report" && <StockReport categories={categories} />}
+
       {/* ── MOVEMENTS ── */}
       {tab === "movements" && (
+        <>
+        {movements && movements.length > 0 && (
+          <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+            {movements.length} record{movements.length === 1 ? "" : "s"}
+          </p>
+        )}
         <Card className="overflow-hidden">
           {movementsLoading ? (
             <EmptyState message="Loading movements..." />
@@ -540,6 +775,7 @@ export default function InventoryPage() {
           ) : (
             movements.map((m) => {
               const inward = m.qty_in > 0;
+              const variant = variantIndex.get(m.variant_id);
               return (
                 <div
                   key={m.movement_id}
@@ -567,18 +803,32 @@ export default function InventoryPage() {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      variant && setDetailProductId(variant.productId)
+                    }
+                    disabled={!variant}
+                    className="min-w-0 flex-1 text-left disabled:cursor-default"
+                  >
                     <p
-                      className="text-sm font-medium"
-                      style={{ color: "var(--color-text-primary)" }}
+                      className="text-sm font-semibold truncate"
+                      style={{
+                        color: variant
+                          ? "var(--color-blurple)"
+                          : "var(--color-text-primary)",
+                      }}
                     >
-                      {m.movement_type.replace(/_/g, " ")}
+                      {variant
+                        ? `${variant.product} (${variant.sku})`
+                        : `Variant #${m.variant_id}`}
                     </p>
                     <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                      Variant #{m.variant_id} · {String(m.date).slice(0, 10)}
+                      {m.movement_type.replace(/_/g, " ")} ·{" "}
+                      {String(m.date).slice(0, 10)}
                       {m.unit_price != null ? ` · ${money(m.unit_price)}` : ""}
                     </p>
-                  </div>
+                  </button>
 
                   <div className="text-right shrink-0">
                     <p
@@ -600,11 +850,23 @@ export default function InventoryPage() {
                       </p>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onDeleteMovement(m.movement_id)}
+                    disabled={movementDeleting}
+                    aria-label="Delete movement"
+                    className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 disabled:opacity-50"
+                    style={{ color: "var(--color-error)" }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               );
             })
           )}
         </Card>
+        </>
       )}
 
       {/* product dialog */}
@@ -644,6 +906,60 @@ export default function InventoryPage() {
             </p>
           )}
         </Dialog>
+      )}
+
+      {/* product detail */}
+      {detailProduct && (
+        <ProductDetailDialog
+          product={detailProduct}
+          categories={categories}
+          onClose={() => setDetailProductId(null)}
+          onAddVariant={() =>
+            setVariantTarget({
+              productId: detailProduct.product_id,
+              variantId: null,
+            })
+          }
+          onEditVariant={(v) =>
+            setVariantTarget({
+              productId: detailProduct.product_id,
+              variantId: v.variant_id,
+            })
+          }
+          onDeleteVariant={(v) => onDeleteVariant(detailProduct, v)}
+          onMovement={(v, direction) =>
+            openMovementFor(detailProduct.product_id, v, direction)
+          }
+          onOpenVariant={(v) =>
+            setLedgerVariant({
+              productId: detailProduct.product_id,
+              variantId: v.variant_id,
+            })
+          }
+        />
+      )}
+
+      {/* variant stock ledger */}
+      {ledgerProduct && ledgerTarget && (
+        <VariantDetailDialog
+          product={ledgerProduct}
+          variant={ledgerTarget}
+          deleting={movementDeleting}
+          onClose={() => setLedgerVariant(null)}
+          onMovement={(direction) =>
+            openMovementFor(ledgerProduct.product_id, ledgerTarget, direction)
+          }
+          onDeleteMovement={onDeleteMovement}
+        />
+      )}
+
+      {/* variant dialog */}
+      {variantProduct && (
+        <VariantDialog
+          product={variantProduct}
+          variant={variantEditing}
+          onClose={() => setVariantTarget(null)}
+        />
       )}
 
       {/* movement dialog */}

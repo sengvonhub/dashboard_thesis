@@ -6,6 +6,7 @@ export interface SetupRequest {
   full_name: string;
   timezone?: string;   
   currency?: string;   
+  max_users?: number;
 }
 
 export interface SetupResponse {
@@ -14,6 +15,7 @@ export interface SetupResponse {
   company_name: string;
   username: string;
   role: string;
+  max_users?: number;
 }
 
 export interface SetupStatusResponse {
@@ -91,6 +93,7 @@ export interface RegisterRequest {
   full_name: string;
   role_id: number;
   department_id?: number;
+  max_users?: number;
 }
 
 export interface RegisterResponse {

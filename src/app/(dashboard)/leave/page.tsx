@@ -41,6 +41,9 @@ import {
   type LeaveStatus,
   type LeaveType,
 } from "@/state/types/leave";
+import { useConfirm } from "@/app/(components)/crud/confirm";
+import LeaveCountdown from "@/app/(components)/Leave/LeaveCountdown";
+import LeaveDetailDialog from "@/app/(components)/Leave/LeaveDetailDialog";
 
 type Tab = "mine" | "manager";
 
@@ -81,16 +84,36 @@ function LeaveRow({
   leave,
   showStaff,
   actions,
+  onClick,
 }: {
   leave: LeaveRequestResponse;
   showStaff?: boolean;
   actions?: React.ReactNode;
+  onClick?: () => void;
 }) {
   const days = leaveDays(leave.start_date, leave.end_date);
+  const Wrapper = (onClick ? "button" : "div") as React.ElementType;
+
   return (
-    <div
-      className="flex items-start gap-3 px-4 py-3.5 border-b last:border-b-0"
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className="w-full flex items-start gap-3 px-4 py-3.5 border-b last:border-b-0 text-left transition-colors"
       style={{ borderColor: "var(--color-divider)" }}
+      onMouseEnter={
+        onClick
+          ? (e: React.MouseEvent<HTMLElement>) => {
+              e.currentTarget.style.background = "var(--color-divider)";
+            }
+          : undefined
+      }
+      onMouseLeave={
+        onClick
+          ? (e: React.MouseEvent<HTMLElement>) => {
+              e.currentTarget.style.background = "transparent";
+            }
+          : undefined
+      }
     >
       {showStaff && (
         <div
@@ -139,14 +162,28 @@ function LeaveRow({
             {leave.reason}
           </p>
         )}
+
+        <LeaveCountdown
+          startDate={leave.start_date}
+          endDate={leave.end_date}
+          status={leave.status}
+        />
       </div>
 
-      {actions && <div className="flex gap-1 shrink-0">{actions}</div>}
-    </div>
+      {actions && (
+        <div
+          className="flex gap-1 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {actions}
+        </div>
+      )}
+    </Wrapper>
   );
 }
 
 export default function LeavePage() {
+  const confirm = useConfirm();
   const { has, isSuperuser } = usePermissions();
   const { staff, hasStaffRecord } = useMe();
 
@@ -158,6 +195,7 @@ export default function LeavePage() {
 
   const [tab, setTab] = useState<Tab>(hasStaffRecord ? "mine" : "manager");
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<LeaveRequestResponse | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -317,6 +355,7 @@ export default function LeavePage() {
               <LeaveRow
                 key={l.leave_id}
                 leave={l}
+                onClick={() => setDetail(l)}
                 actions={
                   // Cancelling is allowed only while pending or approved.
                   ["pending", "approved"].includes(l.status)
@@ -397,6 +436,7 @@ export default function LeavePage() {
                   key={l.leave_id}
                   leave={l}
                   showStaff
+                  onClick={() => setDetail(l)}
                   actions={
                     <>
                       {l.status === "pending" && (
@@ -429,8 +469,13 @@ export default function LeavePage() {
                         "Delete",
                         Trash2,
                         "var(--color-error)",
-                        () => {
-                          if (!window.confirm(`Delete leave request #${l.leave_id}?`)) return;
+                        async () => {
+                          const ok = await confirm({
+                            title: `Delete leave request #${l.leave_id}`,
+                            message: "This request will be removed.",
+                            confirmLabel: "Delete request",
+                          });
+                          if (!ok) return;
                           run(
                             () => deleteLeave(l.leave_id).unwrap(),
                             "Could not delete this request."
@@ -445,6 +490,10 @@ export default function LeavePage() {
             )}
           </Card>
         </>
+      )}
+
+      {detail && (
+        <LeaveDetailDialog leave={detail} onClose={() => setDetail(null)} />
       )}
 
       {open && (

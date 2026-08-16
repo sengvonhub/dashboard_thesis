@@ -1,12 +1,20 @@
 export type PaymentStatus = "pending" | "paid" | "cancelled";
 export type AdjustmentType = "bonus" | "deduction";
 
+// The API sometimes serializes `payment_status` as the enum's Python repr
+// ("PaymentStatus.paid") instead of its value ("paid") — normalize on the
+// way in so every consumer (badges, `=== "paid"` checks, filters) sees the
+// plain value.
+export function normalizePaymentStatus(status: string): PaymentStatus {
+  return (status.includes(".") ? status.split(".").pop()! : status) as PaymentStatus;
+}
+
 // ── Salaries ─────────────────────────────────────────
 /** POST /salaries/ — JSON body (SalaryCreate). */
 export interface SalaryCreate {
   staff_id: number;
   managed_by?: number | null;
-  // base_salary: number | string;
+  base_salary: number | string;
   bonus?: number | string;
   deductions?: number | string;
   net_salary?: number | string | null; // server recalculates anyway
@@ -51,6 +59,10 @@ export interface SalaryStaffGroupResponse {
   username: string;
   full_name: string;
   salaries: SalaryResponse[];
+}
+
+export function normalizeSalary(s: SalaryResponse): SalaryResponse {
+  return { ...s, payment_status: normalizePaymentStatus(s.payment_status) };
 }
 
 /**

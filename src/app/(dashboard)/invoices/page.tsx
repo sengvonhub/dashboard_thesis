@@ -7,7 +7,6 @@ import {
   FileText,
   Loader2,
   Paperclip,
-  Plus,
   Receipt,
   Trash2,
   User,
@@ -25,66 +24,47 @@ import {
   EmptyState,
   SearchBar,
   SelectField,
-  TextField,
   apiMessage,
   money,
 } from "@/app/(components)/crud";
 import {
-  useCreateInvoiceMutation,
+  useCreateInvoiceFromQuotationMutation,
   useDeleteInvoiceMutation,
   useGetCustomersQuery,
   useGetInvoicesQuery,
-  useGetProductsQuery,
 } from "@/state/tageTypes/services/inventoryApi";
+import { useGetQuotationsQuery } from "@/state/tageTypes/services/quotationApi";
 import { useMe } from "@/state/tageTypes/lib/useMe";
 import type { InvoiceResponse, PaymentType } from "@/state/types/inventory";
-
-interface DraftItem {
-  key: number;
-  variant_id: string;
-  product_id: string;
-  quantity: string;
-  unit_price: string;
-}
-
-const newItem = (): DraftItem => ({
-  key: Date.now() + Math.random(),
-  variant_id: "",
-  product_id: "",
-  quantity: "1",
-  unit_price: "",
-});
+import { useConfirm } from "@/app/(components)/crud/confirm";
+import InvoiceDetailDialog from "@/app/(components)/Invoice/InvoiceDetailDialog";
 
 export default function InvoicesPage() {
+  const confirm = useConfirm();
   const { hasStaffRecord } = useMe();
   const { data: invoices, isLoading, error: loadError } = useGetInvoicesQuery();
   const { data: customers } = useGetCustomersQuery();
-  const { data: products } = useGetProductsQuery();
-  const [createInvoice, { isLoading: creating }] = useCreateInvoiceMutation();
+  // Only an accepted, not-yet-converted quotation can become an invoice.
+  const { data: quotations } = useGetQuotationsQuery({ status: "accepted" });
+  const [createInvoiceFromQuotation, { isLoading: creating }] =
+    useCreateInvoiceFromQuotationMutation();
   const [deleteInvoice, { isLoading: deleting }] = useDeleteInvoiceMutation();
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState("");
+  const [detail, setDetail] = useState<InvoiceResponse | null>(null);
+  const [quotationId, setQuotationId] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType | "">("");
-  const [discount, setDiscount] = useState("0");
-  const [tax, setTax] = useState("0");
-  const [items, setItems] = useState<DraftItem[]>([newItem()]);
   const [error, setError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  /** Every variant across all products, for the line-item picker. */
-  const variantOptions = useMemo(
-    () =>
-      (products ?? []).flatMap((p) =>
-        p.variants.map((v) => ({
-          value: String(v.variant_id),
-          label: `${p.name} — ${v.sku || `#${v.variant_id}`} (${money(v.price)})`,
-          productId: p.product_id,
-          price: Number(v.price ?? 0),
-        }))
-      ),
-    [products]
+  const convertibleQuotations = useMemo(
+    () => (quotations ?? []).filter((q) => !q.invoice_id),
+    [quotations]
+  );
+  const selectedQuotation = useMemo(
+    () => convertibleQuotations.find((q) => String(q.quotation_id) === quotationId) ?? null,
+    [convertibleQuotations, quotationId]
   );
 
   const customerName = (id?: number | null) =>
@@ -110,23 +90,9 @@ export default function InvoicesPage() {
     [invoices]
   );
 
-  const draftTotal = useMemo(() => {
-    const sub = items.reduce(
-      (n, it) => n + Number(it.quantity || 0) * Number(it.unit_price || 0),
-      0
-    );
-    return sub - Number(discount || 0) + Number(tax || 0);
-  }, [items, discount, tax]);
-
-  const setItem = (key: number, patch: Partial<DraftItem>) =>
-    setItems((list) => list.map((it) => (it.key === key ? { ...it, ...patch } : it)));
-
   const openCreate = () => {
-    setCustomerId("");
+    setQuotationId("");
     setPaymentType("");
-    setDiscount("0");
-    setTax("0");
-    setItems([newItem()]);
     setError(null);
     setOpen(true);
   };
@@ -135,28 +101,19 @@ export default function InvoicesPage() {
     e.preventDefault();
     setError(null);
 
-    const clean = items.filter((it) => it.variant_id && Number(it.quantity) > 0);
-    if (!clean.length) {
-      setError("Add at least one line item with a variant and quantity.");
+    if (!quotationId) {
+      setError("Select a quotation to invoice.");
       return;
     }
 
     try {
-      await createInvoice({
-        customer_id: customerId ? Number(customerId) : null,
+      await createInvoiceFromQuotation({
+        quotation_id: Number(quotationId),
         payment_type: paymentType || null,
-        discount: Number(discount || 0),
-        tax: Number(tax || 0),
-        total_amount: draftTotal,
-        items: clean.map((it) => ({
-          product_id: it.product_id ? Number(it.product_id) : null,
-          variant_id: Number(it.variant_id),
-          quantity: Number(it.quantity),
-          unit_price: Number(it.unit_price || 0),
-        })),
       }).unwrap();
       setOpen(false);
     } catch (err) {
+      // 400 when the quotation has no items or is already converted.
       setError(apiMessage(err, "Could not create this invoice."));
     }
   };
@@ -206,7 +163,12 @@ export default function InvoicesPage() {
     });
 
   const onDelete = async (inv: InvoiceResponse) => {
-    if (!window.confirm(`Delete invoice #${inv.invoice_id}?`)) return;
+    const ok = await confirm({
+      title: `Delete invoice #${inv.invoice_id}`,
+      message: "The invoice and its line items will be removed.",
+      confirmLabel: "Delete invoice",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteInvoice(inv.invoice_id).unwrap();
@@ -282,8 +244,23 @@ export default function InvoicesPage() {
           {filtered.map((inv) => (
             <div
               key={inv.invoice_id}
-              className="flex items-center gap-3 px-4 py-3.5 border-b last:border-b-0"
+              role="button"
+              tabIndex={0}
+              onClick={() => setDetail(inv)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setDetail(inv);
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 border-b last:border-b-0 text-left cursor-pointer transition-colors"
               style={{ borderColor: "var(--color-divider)" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--color-divider)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
             >
               <div
                 className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
@@ -338,7 +315,10 @@ export default function InvoicesPage() {
 
               <button
                 type="button"
-                onClick={() => onDelete(inv)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(inv);
+                }}
                 disabled={deleting}
                 aria-label={`Delete invoice ${inv.invoice_id}`}
                 className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 disabled:opacity-50"
@@ -355,6 +335,14 @@ export default function InvoicesPage() {
         </Card>
       )}
 
+      {detail && (
+        <InvoiceDetailDialog
+          invoice={detail}
+          customerName={customerName(detail.customer_id)}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
       {open && (
         <Dialog
           title="New invoice"
@@ -365,137 +353,83 @@ export default function InvoicesPage() {
           saving={creating}
           error={error}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SelectField
-              label="Customer"
-              value={customerId}
-              placeholder="— walk-in —"
-              onChange={setCustomerId}
-              options={(customers ?? []).map((c) => ({
-                value: String(c.customer_id),
-                label: c.name,
-              }))}
-            />
-            <SelectField
-              label="Payment type"
-              value={paymentType}
-              placeholder="— unset —"
-              onChange={(v) => setPaymentType(v as PaymentType | "")}
-              options={[
-                { value: "cash", label: "Cash" },
-                { value: "card", label: "Card" },
-                { value: "transfer", label: "Transfer" },
-              ]}
-            />
-          </div>
+          <SelectField
+            label="Quotation"
+            value={quotationId}
+            placeholder="— pick an accepted quotation —"
+            onChange={setQuotationId}
+            options={convertibleQuotations.map((q) => ({
+              value: String(q.quotation_id),
+              label: `${q.ref_number} — ${q.customer_name ?? "No customer"} (${money(
+                q.total_amount
+              )})`,
+            }))}
+          />
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span
-                className="text-[11px] font-semibold uppercase tracking-wide"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                Line items
-              </span>
-              <button
-                type="button"
-                onClick={() => setItems((l) => [...l, newItem()])}
-                className="inline-flex items-center gap-1 text-xs font-semibold"
-                style={{ color: "var(--color-blurple)" }}
-              >
-                <Plus className="h-3 w-3" />
-                Add item
-              </button>
-            </div>
+          {!convertibleQuotations.length && (
+            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+              No accepted quotations are available to invoice yet. Mark a
+              quotation as accepted first.
+            </p>
+          )}
 
-            <div className="flex flex-col gap-2">
-              {items.map((it) => (
-                <div
-                  key={it.key}
-                  className="grid grid-cols-12 gap-2 items-end rounded-xl border p-3"
-                  style={{ borderColor: "var(--color-border)" }}
-                >
-                  <div className="col-span-12 sm:col-span-6">
-                    <SelectField
-                      label="Variant"
-                      value={it.variant_id}
-                      placeholder="— pick —"
-                      onChange={(v) => {
-                        const opt = variantOptions.find((o) => o.value === v);
-                        setItem(it.key, {
-                          variant_id: v,
-                          product_id: opt ? String(opt.productId) : "",
-                          // Seed from the variant's price; still editable.
-                          unit_price: opt ? String(opt.price) : it.unit_price,
-                        });
-                      }}
-                      options={variantOptions}
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <TextField
-                      label="Qty"
-                      value={it.quantity}
-                      inputMode="numeric"
-                      onChange={(v) => setItem(it.key, { quantity: v })}
-                    />
-                  </div>
-                  <div className="col-span-5 sm:col-span-3">
-                    <TextField
-                      label="Unit price"
-                      value={it.unit_price}
-                      inputMode="decimal"
-                      onChange={(v) => setItem(it.key, { unit_price: v })}
-                    />
-                  </div>
-                  <div className="col-span-3 sm:col-span-1 flex justify-end pb-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setItems((l) =>
-                          l.length === 1 ? l : l.filter((x) => x.key !== it.key)
-                        )
-                      }
-                      aria-label="Remove item"
-                      className="h-9 w-9 rounded-lg flex items-center justify-center"
-                      style={{ color: "var(--color-error)" }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SelectField
+            label="Payment type"
+            value={paymentType}
+            placeholder="— unset —"
+            onChange={(v) => setPaymentType(v as PaymentType | "")}
+            options={[
+              { value: "cash", label: "Cash" },
+              { value: "card", label: "Card" },
+              { value: "transfer", label: "Transfer" },
+            ]}
+          />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <TextField
-              label="Discount"
-              value={discount}
-              inputMode="decimal"
-              onChange={setDiscount}
-            />
-            <TextField label="Tax" value={tax} inputMode="decimal" onChange={setTax} />
-          </div>
-
-          <div
-            className="rounded-xl px-4 py-3 flex items-center justify-between"
-            style={{ background: "var(--color-success-tint)" }}
-          >
-            <span
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: "var(--color-success)" }}
+          {selectedQuotation && (
+            <div
+              className="rounded-xl border overflow-hidden"
+              style={{ borderColor: "var(--color-border)" }}
             >
-              Total
-            </span>
-            <span className="text-lg font-bold" style={{ color: "var(--color-success)" }}>
-              {money(draftTotal)}
-            </span>
-          </div>
+              <div
+                className="px-3 py-2 flex flex-col gap-1"
+                style={{ borderColor: "var(--color-divider)" }}
+              >
+                {selectedQuotation.items.map((it) => (
+                  <div
+                    key={it.item_id}
+                    className="flex items-center justify-between text-sm"
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    <span className="truncate">
+                      {it.item_name} × {it.quantity}
+                    </span>
+                    <span className="tabular-nums shrink-0 ml-2">
+                      {money(it.total_price)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div
+                className="px-3 py-2.5 border-t flex items-center justify-between"
+                style={{ borderColor: "var(--color-divider)", background: "var(--color-success-tint)" }}
+              >
+                <span
+                  className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--color-success)" }}
+                >
+                  Total
+                </span>
+                <span className="text-lg font-bold" style={{ color: "var(--color-success)" }}>
+                  {money(selectedQuotation.total_amount)}
+                </span>
+              </div>
+            </div>
+          )}
 
           <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-            Creating this invoice deducts each line item&rsquo;s quantity from the
-            variant&rsquo;s stock.
+            The invoice&rsquo;s customer, line items, discount and tax are
+            copied from the quotation — edit them there before converting if
+            they need to change.
           </p>
         </Dialog>
       )}

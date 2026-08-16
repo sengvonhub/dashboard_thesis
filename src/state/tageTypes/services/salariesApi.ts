@@ -9,11 +9,13 @@ import type {
   SalaryUpdate,
   MarkPaidRequest,
 } from "@/state/types/salaries";
+import { normalizeSalary } from "@/state/types/salaries";
 
 export const salariesApi = api.injectEndpoints({
   endpoints: (build) => ({
     getMySalaries: build.query<SalaryResponse[], void>({
       query: () => "/salaries/my",
+      transformResponse: (r: SalaryResponse[]) => r.map(normalizeSalary),
       providesTags: [{ type: "HR", id: "SALARY-ME" }],
     }),
 
@@ -23,6 +25,7 @@ export const salariesApi = api.injectEndpoints({
 
     getSalariesByStaff: build.query<SalaryResponse[], number>({
       query: (staffId) => `/salaries/staff/${staffId}`,
+      transformResponse: (r: SalaryResponse[]) => r.map(normalizeSalary),
       providesTags: (_r, _e, staffId) => [
         { type: "HR", id: `SALARY-BY_STAFF-${staffId}` },
       ],
@@ -31,6 +34,8 @@ export const salariesApi = api.injectEndpoints({
     /** GET /salaries/group/staff — salaries grouped by staff + user. */
     getSalariesGroupedByStaff: build.query<SalaryStaffGroupResponse[], void>({
       query: () => "/salaries/group/staff",
+      transformResponse: (r: SalaryStaffGroupResponse[]) =>
+        r.map((g) => ({ ...g, salaries: g.salaries.map(normalizeSalary) })),
       providesTags: [{ type: "HR", id: "SALARY-GROUP" }],
     }),
 
@@ -46,6 +51,7 @@ export const salariesApi = api.injectEndpoints({
         const qs = params.toString();
         return `/salaries/${qs ? `?${qs}` : ""}`;
       },
+      transformResponse: (r: SalaryResponse[]) => r.map(normalizeSalary),
       providesTags: (result) =>
         result
           ? [
@@ -67,6 +73,7 @@ export const salariesApi = api.injectEndpoints({
     /** GET /salaries/{id}. */
     getSalaryById: build.query<SalaryResponse, number>({
       query: (salaryId) => `/salaries/${salaryId}`,
+      transformResponse: normalizeSalary,
       providesTags: (_r, _e, salaryId) => [
         { type: "HR", id: `SALARY-${salaryId}` },
       ],
@@ -76,6 +83,7 @@ export const salariesApi = api.injectEndpoints({
     /** POST /salaries/ — creates a record and notifies the staff member. */
     createSalary: build.mutation<SalaryResponse, SalaryCreate>({
       query: (body) => ({ url: "/salaries/", method: "POST", body }),
+      transformResponse: normalizeSalary,
       invalidatesTags: (result) => [
         { type: "HR", id: "SALARY-LIST" },
         { type: "HR", id: "SALARY-SUMMARY" },
@@ -94,6 +102,7 @@ export const salariesApi = api.injectEndpoints({
         method: "PATCH",
         body: data,
       }),
+      transformResponse: normalizeSalary,
       invalidatesTags: (result, _e, { salaryId }) => [
         { type: "HR", id: `SALARY-${salaryId}` },
         { type: "HR", id: "SALARY-LIST" },
@@ -116,6 +125,7 @@ export const salariesApi = api.injectEndpoints({
         method: "PATCH",
         body: data?.payment_date ? { payment_date: data.payment_date } : {},
       }),
+      transformResponse: normalizeSalary,
       invalidatesTags: (result, _e, { salaryId }) => [
         { type: "HR", id: `SALARY-${salaryId}` },
         { type: "HR", id: "SALARY-LIST" },

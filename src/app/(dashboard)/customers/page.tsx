@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Loader2, Mail, Pencil, Phone, Trash2, Wallet } from "lucide-react";
+import { Loader2, Mail, Pencil, Phone, Receipt, Trash2, Wallet } from "lucide-react";
 import {
   Card,
   CrudHeader,
@@ -18,14 +18,20 @@ import {
   useCreateCustomerMutation,
   useDeleteCustomerMutation,
   useGetCustomersQuery,
+  useGetInvoicesQuery,
   useUpdateCustomerMutation,
 } from "@/state/tageTypes/services/inventoryApi";
-import type { CustomerResponse } from "@/state/types/inventory";
+import type { CustomerResponse, InvoiceResponse } from "@/state/types/inventory";
+import { useConfirm } from "@/app/(components)/crud/confirm";
+import CustomerInvoicesDialog from "@/app/(components)/Customers/CustomerInvoicesDialog";
+import InvoiceDetailDialog from "@/app/(components)/Invoice/InvoiceDetailDialog";
 
 const EMPTY = { name: "", email: "", phone: "" };
 
 export default function CustomersPage() {
+  const confirm = useConfirm();
   const { data: customers, isLoading, error: loadError } = useGetCustomersQuery();
+  const { data: invoices } = useGetInvoicesQuery();
   const [createCustomer, { isLoading: creating }] = useCreateCustomerMutation();
   const [updateCustomer, { isLoading: updating }] = useUpdateCustomerMutation();
   const [deleteCustomer, { isLoading: deleting }] = useDeleteCustomerMutation();
@@ -37,6 +43,20 @@ export default function CustomersPage() {
   const [avatar, setAvatar] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [invoiceListFor, setInvoiceListFor] = useState<CustomerResponse | null>(null);
+  const [invoiceDetail, setInvoiceDetail] = useState<InvoiceResponse | null>(null);
+  const [invoiceDetailCustomerName, setInvoiceDetailCustomerName] = useState<string | null>(null);
+
+  const invoicesByCustomer = useMemo(() => {
+    const map = new Map<number, InvoiceResponse[]>();
+    for (const inv of invoices ?? []) {
+      if (inv.customer_id == null) continue;
+      const list = map.get(inv.customer_id) ?? [];
+      list.push(inv);
+      map.set(inv.customer_id, list);
+    }
+    return map;
+  }, [invoices]);
 
   const set = (k: keyof typeof form) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -97,7 +117,12 @@ export default function CustomersPage() {
   };
 
   const onDelete = async (c: CustomerResponse) => {
-    if (!window.confirm(`Delete customer “${c.name}”?`)) return;
+    const ok = await confirm({
+      title: `Delete ${c.name}`,
+      message: "This customer and their purchase total will be removed.",
+      confirmLabel: "Delete customer",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteCustomer(c.customer_id).unwrap();
@@ -226,6 +251,22 @@ export default function CustomersPage() {
                   </span>
                 )}
               </div>
+
+              {(invoicesByCustomer.get(c.customer_id)?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setInvoiceListFor(c)}
+                  className="flex items-center justify-between rounded-xl px-3 py-2 -mx-1 text-xs font-semibold"
+                  style={{ background: "var(--color-warning-tint)", color: "var(--color-warning)" }}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Receipt className="h-3.5 w-3.5" />
+                    {invoicesByCustomer.get(c.customer_id)!.length} invoice
+                    {invoicesByCustomer.get(c.customer_id)!.length === 1 ? "" : "s"}
+                  </span>
+                  <span>View</span>
+                </button>
+              )}
             </Card>
           ))}
         </div>
@@ -257,6 +298,27 @@ export default function CustomersPage() {
             <TextField label="Phone" value={form.phone} onChange={set("phone")} />
           </div>
         </Dialog>
+      )}
+
+      {invoiceListFor && (
+        <CustomerInvoicesDialog
+          customer={invoiceListFor}
+          invoices={invoicesByCustomer.get(invoiceListFor.customer_id) ?? []}
+          onClose={() => setInvoiceListFor(null)}
+          onSelectInvoice={(inv) => {
+            setInvoiceDetailCustomerName(invoiceListFor.name);
+            setInvoiceListFor(null);
+            setInvoiceDetail(inv);
+          }}
+        />
+      )}
+
+      {invoiceDetail && (
+        <InvoiceDetailDialog
+          invoice={invoiceDetail}
+          customerName={invoiceDetailCustomerName}
+          onClose={() => setInvoiceDetail(null)}
+        />
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import type { AttendanceResponse } from "@/state/types/attendance";
+import { Card } from "@/app/(components)/crud";
 
 // ── helpers ──────────────────────────────────────────────
 
@@ -97,25 +98,28 @@ export function StatsRow({
   ];
 
   return (
-    <div className="grid grid-cols-3">
+    <Card className="grid grid-cols-3 overflow-hidden">
       {cells.map((c, i) => {
         const Icon = c.icon;
         return (
           <div
             key={c.label}
-            className="flex flex-col items-center py-4"
+            className="flex flex-col items-center gap-2 py-5"
             style={{
               borderLeft: i === 0 ? "none" : "1px solid var(--color-divider)",
             }}
           >
-            <div className="flex items-center gap-1.5">
+            <div
+              className="h-9 w-9 rounded-full flex items-center justify-center"
+              style={{ background: `color-mix(in srgb, ${c.tint} 15%, transparent)` }}
+            >
               <Icon className="h-4 w-4" style={{ color: c.tint }} />
-              <span className="text-xl font-bold" style={{ color: c.tint }}>
-                {c.value}
-              </span>
             </div>
+            <span className="text-xl font-bold leading-none" style={{ color: c.tint }}>
+              {c.value}
+            </span>
             <span
-              className="text-xs mt-1"
+              className="text-xs font-medium"
               style={{ color: "var(--color-text-secondary)" }}
             >
               {c.label}
@@ -123,7 +127,7 @@ export function StatsRow({
           </div>
         );
       })}
-    </div>
+    </Card>
   );
 }
 
@@ -228,7 +232,7 @@ export function AttendanceRow({
     <Wrapper
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-1 py-3.5 border-b text-left ${
+      className={`w-full flex items-center gap-3 px-4 py-3.5 border-b last:border-b-0 text-left ${
         onClick ? "transition-colors" : ""
       }`}
       style={{ borderColor: "var(--color-divider)" }}

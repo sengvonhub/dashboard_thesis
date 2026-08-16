@@ -10,15 +10,33 @@ interface Toast {
 }
 
 const ToastContext = createContext<{
-  push: (message: string, variant?: ToastVariant) => void;
+  push: (message: unknown, variant?: ToastVariant) => void;
 } | null>(null);
+
+// FastAPI validation errors (422) send `detail` as an array of
+// {type, loc, msg, input} objects instead of a string — and some error
+// paths pass the whole error object through. Toasts render `message`
+// directly as a React child, so anything non-string must be flattened to
+// text here rather than at every call site.
+function toDisplayMessage(message: unknown): string {
+  if (typeof message === "string") return message;
+  if (Array.isArray(message)) {
+    return message
+      .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as any).msg) : String(item)))
+      .join("; ");
+  }
+  if (message && typeof message === "object" && "msg" in message) {
+    return String((message as any).msg);
+  }
+  return "Something went wrong";
+}
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const push = useCallback((message: string, variant: ToastVariant = "info") => {
+  const push = useCallback((message: unknown, variant: ToastVariant = "info") => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, variant }]);
+    setToasts((t) => [...t, { id, message: toDisplayMessage(message), variant }]);
     setTimeout(() => {
       setToasts((t) => t.filter((toast) => toast.id !== id));
     }, 3500);
@@ -51,8 +69,8 @@ export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
   return {
-    success: (msg: string) => ctx.push(msg, "success"),
-    error: (msg: string) => ctx.push(msg, "error"),
-    info: (msg: string) => ctx.push(msg, "info"),
+    success: (msg: unknown) => ctx.push(msg, "success"),
+    error: (msg: unknown) => ctx.push(msg, "error"),
+    info: (msg: unknown) => ctx.push(msg, "info"),
   };
 }

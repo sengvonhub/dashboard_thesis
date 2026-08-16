@@ -177,7 +177,7 @@ export default function RolePermissionsDialog({
         </div>
 
         <form onSubmit={onSubmit} className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-5">
             {allGroups.map((group) => {
               const allOn = group.codes.every((c) => selected.has(c));
               return (

@@ -86,10 +86,12 @@ export function SalaryFormDialog({ open, onOpenChange, salary }: Props) {
         }).unwrap();
         toast.success("Salary record updated");
       } else {
-        // ❌ base_salary intentionally omitted — SalaryCreate no longer
-        // accepts it, the backend always pulls it from staff.staff_role
+        // base_salary is required by the API — it isn't user-editable on
+        // create, so send the value derived from the staff's role (the same
+        // number shown in the read-only preview below).
         await createSalary({
           staff_id: Number(form.staff_id),
+          base_salary: roleBaseSalary as number | string,
           bonus: form.bonus,
           deductions: form.deductions,
           pay_period_start: form.pay_period_start,

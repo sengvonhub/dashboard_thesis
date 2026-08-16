@@ -8,7 +8,7 @@ import { ToastProvider } from "@/app/(components)/ui/toast";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
-export const metadata: Metadata = { title: "BizCore", description: "..." };
+export const metadata: Metadata = { title: "System", description: "..." };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const cookieStore = await cookies();

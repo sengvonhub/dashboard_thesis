@@ -10,7 +10,9 @@ import {
   Wallet,
   CalendarX2,
   MessageSquare,
+  ScrollText,
   Settings,
+  ShieldCheck,
   UserCog,
   LayoutDashboard,
   LucideIcon,
@@ -54,10 +56,23 @@ export const MODULES: ModuleItem[] = [
 // are deliberately kept out of MODULES so the dashboard grid keeps showing
 // exactly the ten system modules.
 export const SYSTEM_ITEMS: ModuleItem[] = [
+  { href: "/users", icon: ShieldCheck, title: "User management", subtitle: "Users, roles & departments", tint: "#7C6FF7" },
   { href: "/communication", icon: MessageSquare, title: "Communication", subtitle: "DM & groups", tint: "#818CF8" },
   { href: "/profile", icon: UserCog, title: "Profile", subtitle: "Account & company", tint: "#60A5FA" },
   { href: "/settings", icon: Settings, title: "Settings", subtitle: "Workspace config", tint: "#94A3B8" },
 ];
 
+// Superuser-only destinations. Kept out of SYSTEM_ITEMS so the Sidebar can
+// append them only when the session is a superuser — every /audit-logs route
+// is `require_superuser`, so showing it to anyone else is a dead link.
+export const SUPERUSER_ITEMS: ModuleItem[] = [
+  { href: "/audit-logs", icon: ScrollText, title: "Audit log", subtitle: "Who changed what", tint: "#F472B6" },
+];
+
 // Every navigable module, for lookups (search, placeholder pages, breadcrumbs).
-export const ALL_ITEMS: ModuleItem[] = [HOME_ITEM, ...MODULES, ...SYSTEM_ITEMS];
+export const ALL_ITEMS: ModuleItem[] = [
+  HOME_ITEM,
+  ...MODULES,
+  ...SYSTEM_ITEMS,
+  ...SUPERUSER_ITEMS,
+];

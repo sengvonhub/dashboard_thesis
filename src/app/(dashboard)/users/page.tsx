@@ -51,6 +51,7 @@ import type {
   UserResponse,
   UserStatus,
 } from "@/state/types/user";
+import { useConfirm } from "@/app/(components)/crud/confirm";
 
 type Tab = "users" | "roles" | "departments";
 
@@ -126,6 +127,7 @@ function RowMenu({
 }
 
 export default function UsersPage() {
+  const confirm = useConfirm();
   const { has } = usePermissions();
   const { companyId } = useAuth();
 
@@ -527,9 +529,13 @@ export default function UsersPage() {
                           label: "Delete user",
                           icon: Trash2,
                           danger: true,
-                          onClick: () => {
-                            if (!window.confirm(`Delete user ${u.username}? This cannot be undone.`))
-                              return;
+                          onClick: async () => {
+                            const ok = await confirm({
+                              title: `Delete ${u.full_name || u.username}`,
+                              message: `The account @${u.username} cannot be recovered.`,
+                              confirmLabel: "Delete user",
+                            });
+                            if (!ok) return;
                             run(
                               () => deleteUser(u.user_id).unwrap(),
                               "Could not delete this user."
@@ -662,9 +668,15 @@ export default function UsersPage() {
 
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (!window.confirm(`Delete role “${r.role_name}”?`)) return;
+                      const ok = await confirm({
+                        title: `Delete ${r.role_name}`,
+                        message:
+                          "Users assigned to this role will lose their permissions.",
+                        confirmLabel: "Delete role",
+                      });
+                      if (!ok) return;
                       run(
                         () => deleteRole(r.role_id).unwrap(),
                         "Could not delete this role — users may still be assigned to it."
@@ -745,9 +757,14 @@ export default function UsersPage() {
 
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (!window.confirm(`Delete department “${d.department_name}”?`)) return;
+                      const ok = await confirm({
+                        title: `Delete ${d.department_name}`,
+                        message: "Users in this department will be left without one.",
+                        confirmLabel: "Delete department",
+                      });
+                      if (!ok) return;
                       run(
                         () => deleteDept(d.department_id).unwrap(),
                         "Could not delete this department."

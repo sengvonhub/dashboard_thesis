@@ -53,6 +53,9 @@ const rawBaseQueryNoAuth = createRawBaseQuery(true);
  * retired and the whole session is torn down. All callers await the same
  * promise instead.
  */
+
+
+
 let refreshPromise: Promise<boolean> | null = null;
 
 const baseQueryWithReauth: BaseQueryFn<
@@ -121,6 +124,8 @@ export const api = createApi({
     "HR",
     "Inventory",
     "Quotation",
+    "Audit",
+    "Setting",
   ],
   endpoints: () => ({}),
 });

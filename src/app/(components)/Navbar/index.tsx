@@ -7,7 +7,6 @@ import {
   Menu,
   Moon,
   Search,
-  Settings,
   Sun,
   UserCog,
 } from "lucide-react";
@@ -15,15 +14,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setDarkMode, setIsSidebarCollapsed } from "@/state";
-import { ALL_ITEMS } from "@/app/config/module";
 import { useLogout } from "@/state/tageTypes/lib/useLogout";
 import { useMe } from "@/state/tageTypes/lib/useMe";
 import { useGetAllStaffQuery } from "@/state/tageTypes/services/staffApi";
 import { useGetProductsQuery } from "@/state/tageTypes/services/inventoryApi";
 import NotificationBell from "./NotificationBell";
-import SearchResultDetail, {
-  type SearchDetailTarget,
-} from "./SearchResultDetail";
 
 /** "Sokha Chan" -> "SC". Kept in step with the detail dialog's avatar. */
 function initialsOf(name: string) {
@@ -94,7 +89,6 @@ function Navbar() {
 
   const [query, setQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<SearchDetailTarget | null>(null);
   const overlayInputRef = useRef<HTMLInputElement>(null);
 
   const { logout, isLoggingOut } = useLogout();
@@ -135,15 +129,6 @@ function Navbar() {
 
   const q = query.trim().toLowerCase();
 
-  const moduleResults = useMemo(() => {
-    if (!q) return ALL_ITEMS;
-    return ALL_ITEMS.filter(
-      (m) =>
-        m.title.toLowerCase().includes(q) ||
-        m.subtitle.toLowerCase().includes(q)
-    );
-  }, [q]);
-
   // Neither API takes a search parameter, so matching happens here over the
   // full lists. Capped so one broad query can't render hundreds of rows.
   const staffResults = useMemo(() => {
@@ -168,8 +153,7 @@ function Navbar() {
       .slice(0, 8);
   }, [q, allProducts]);
 
-  const totalResults =
-    moduleResults.length + staffResults.length + productResults.length;
+  const totalResults = staffResults.length + productResults.length;
 
   const openSearch = () => setIsSearchOpen(true);
   const closeSearch = () => {
@@ -229,13 +213,6 @@ function Navbar() {
     router.push(href);
   };
 
-  // Staff and product hits open a detail dialog instead of navigating — there
-  // is no per-record page to route to yet.
-  const openDetail = (target: SearchDetailTarget) => {
-    closeSearch();
-    setDetailTarget(target);
-  };
-
   return (
     <div className={`flex justify-between items-center w-full mb-7`}>
       {/* LEFT SIDE */}
@@ -265,7 +242,7 @@ function Navbar() {
             className="w-4 h-4 absolute left-3"
             style={{ color: "var(--color-text-muted)" }}
           />
-          Search modules, settings...
+          Search staff, products...
         </button>
       </div>
 
@@ -443,7 +420,7 @@ function Navbar() {
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search modules, settings..."
+                  placeholder="Search staff, products..."
                   className="flex-1 bg-transparent text-sm focus:outline-none"
                   style={{ color: "var(--color-card-text-primary)" }}
                 />
@@ -464,11 +441,18 @@ function Navbar() {
             >
               {query.trim()
                 ? `${totalResults} result${totalResults === 1 ? "" : "s"}`
-                : "All destinations"}
+                : "Staff & products"}
             </div>
 
             <div className="relative flex-1 overflow-y-auto">
-              {totalResults === 0 ? (
+              {!query.trim() ? (
+                <p
+                  className="px-1 py-10 text-sm text-center"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Start typing to search staff and products.
+                </p>
+              ) : totalResults === 0 ? (
                 <p
                   className="px-1 py-10 text-sm text-center"
                   style={{ color: "var(--color-text-muted)" }}
@@ -479,34 +463,7 @@ function Navbar() {
                 </p>
               ) : (
                 <>
-                  {/* MODULES — navigate */}
-                  {moduleResults.length > 0 && (
-                    <>
-                      <SectionHeading>Modules</SectionHeading>
-                      {moduleResults.map((mod) => {
-                        const Icon = mod.icon;
-                        return (
-                          <ResultRow
-                            key={mod.href}
-                            tint={mod.tint}
-                            title={mod.title}
-                            subtitle={mod.subtitle}
-                            onClick={() => handleSelect(mod.href)}
-                            leading={
-                              <div
-                                className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-                                style={{ background: `${mod.tint}26` }}
-                              >
-                                <Icon className="h-5 w-5" style={{ color: mod.tint }} />
-                              </div>
-                            }
-                          />
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* STAFF — open detail */}
+                  {/* STAFF — link to the HR page */}
                   {staffResults.length > 0 && (
                     <>
                       <SectionHeading>Staff</SectionHeading>
@@ -520,7 +477,7 @@ function Navbar() {
                               .filter(Boolean)
                               .join(" · ") || "Staff"
                           }
-                          onClick={() => openDetail({ kind: "staff", item: s })}
+                          onClick={() => handleSelect("/hr")}
                           leading={
                             <div
                               className="h-10 w-10 rounded-full overflow-hidden flex items-center justify-center shrink-0"
@@ -552,7 +509,7 @@ function Navbar() {
                     </>
                   )}
 
-                  {/* PRODUCTS — open detail */}
+                  {/* PRODUCTS — link to the Inventory page */}
                   {productResults.length > 0 && (
                     <>
                       <SectionHeading>Products</SectionHeading>
@@ -571,9 +528,7 @@ function Navbar() {
                             subtitle={`${p.variants.length} variant${
                               p.variants.length === 1 ? "" : "s"
                             } · ${stock} in stock`}
-                            onClick={() =>
-                              openDetail({ kind: "product", item: p })
-                            }
+                            onClick={() => handleSelect("/inventory")}
                             leading={
                               <div
                                 className="h-10 w-10 rounded-xl overflow-hidden flex items-center justify-center shrink-0"
@@ -604,13 +559,6 @@ function Navbar() {
             </div>
           </div>
         </div>
-      )}
-
-      {detailTarget && (
-        <SearchResultDetail
-          target={detailTarget}
-          onClose={() => setDetailTarget(null)}
-        />
       )}
     </div>
   );

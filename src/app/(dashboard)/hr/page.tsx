@@ -25,6 +25,7 @@ import {
   useGetStaffRolesQuery,
 } from "@/state/tageTypes/services/staffApi";
 import type { StaffResponse, StaffRoleResponse } from "@/state/types/user";
+import { useConfirm } from "@/app/(components)/crud/confirm";
 
 type Tab = "staff" | "roles";
 
@@ -175,6 +176,7 @@ function StaffCard({
 }
 
 export default function HrPage() {
+  const confirm = useConfirm();
   const { has } = usePermissions();
   // Every write route here is gated on MANAGE_USERS, so reads stay open to
   // any signed-in user (GET /staff/ is only require_login) but the controls
@@ -221,7 +223,12 @@ export default function HrPage() {
   );
 
   const onDeleteStaff = async (s: StaffResponse) => {
-    if (!window.confirm(`Delete ${s.name}? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete ${s.name}`,
+      message: "This staff record cannot be recovered.",
+      confirmLabel: "Delete staff",
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteStaff(s.staff_id).unwrap();
@@ -231,7 +238,12 @@ export default function HrPage() {
   };
 
   const onDeleteRole = async (r: StaffRoleResponse) => {
-    if (!window.confirm(`Delete the role “${r.role_name}”?`)) return;
+    const ok = await confirm({
+      title: `Delete ${r.role_name}`,
+      message: "Staff assigned to this role will lose it.",
+      confirmLabel: "Delete role",
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteRole(r.staff_role_id).unwrap();

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { CalendarDays, MoreHorizontal, Plus } from "lucide-react";
 import { useToast } from "@/app/(components)/ui/toast";
+import { useAppSelector } from "@/app/redux";
 import { useGetAllStaffQuery } from "@/state/tageTypes/services/staffApi";
 import {
   useDeleteSalaryMutation,
@@ -12,7 +13,8 @@ import {
 } from "@/state/tageTypes/services/salariesApi";
 import { usePermissions } from "@/state/tageTypes/lib/hook";
 import { Permissions } from "@/state/permissions";
-import { Button, Select } from "@/app/(components)/ui/form-elements";
+import { Button, Label, Select } from "@/app/(components)/ui/form-elements";
+import { Modal } from "@/app/(components)/ui/modal";
 import { formatMoney } from "@/state/tageTypes/lib/format-money";
 import { SalaryStatusBadge } from "@/app/(components)/ui/status-badge";
 import { DropdownMenu, DropdownMenuItem } from "@/app/(components)/ui/dropdown-menu";
@@ -23,6 +25,17 @@ import { AdjustmentsDialog } from "./adjustments-dialog";
 import { AlertDialog } from "@/app/(components)/ui/alert-dialog";
 import type { SalaryResponse, PaymentStatus } from "@/state/types/salaries";
 import type { StaffResponse } from "@/state/types/user";
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// "2026-08" -> "August 2026"
+function monthFilterLabel(monthStr: string): string {
+  const [year, month] = monthStr.split("-").map(Number);
+  return `${MONTH_NAMES[month - 1] ?? month} ${year}`;
+}
 
 // "" = no month filter, otherwise "YYYY-MM" from <input type="month">
 function getMonthRange(monthStr: string): [string, string] {
@@ -46,17 +59,27 @@ function getCurrentMonthStr(): string {
 // the PDF response as a blob, and triggers a normal browser download.
 // Not an RTK Query endpoint since this is a one-off file download, not
 // cached/re-rendered data.
+//
+// Must go through NEXT_PUBLIC_API_BASE_URL with an explicit Authorization
+// header, same as OfficeQrCard's PDF/PNG download — a relative `/api/...`
+// fetch hits this Next.js app itself (no such route here, so it 404s) and a
+// plain fetch carries no Bearer token, so the manager-gated route 401s even
+// against the right host.
 
-
-
-
-
-async function downloadMonthlyReport(monthStr: string, toast: ReturnType<typeof useToast>) {
+async function downloadMonthlyReport(
+  monthStr: string,
+  accessToken: string | null,
+  toast: ReturnType<typeof useToast>
+) {
   const [year, month] = monthStr.split("-");
   try {
-    const res = await fetch(`/api/salaries/report?year=${year}&month=${Number(month)}`, {
-      credentials: "include", // adjust to match how your api client sends auth
-    });
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/salaries/report?year=${year}&month=${Number(month)}`,
+      {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        credentials: "include",
+      }
+    );
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       throw new Error(body?.detail ?? "Failed to generate report");
@@ -97,6 +120,24 @@ export default function PayrollPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   // ✅ defaults to the current month instead of "all" — click Clear to see everything
   const [monthFilter, setMonthFilter] = useState<string>(() => getCurrentMonthStr());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [pickerYear, setPickerYear] = useState<number>(() => new Date().getFullYear());
+
+  const openMonthPicker = () => {
+    const [y, m] = (monthFilter || getCurrentMonthStr()).split("-").map(Number);
+    setPickerYear(y);
+    setPickerMonth(m);
+    setMonthPickerOpen(true);
+  };
+  const applyMonthPicker = () => {
+    setMonthFilter(`${pickerYear}-${String(pickerMonth).padStart(2, "0")}`);
+    setMonthPickerOpen(false);
+  };
+  const pickerYears = useMemo(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 8 }, (_, i) => current - 6 + i);
+  }, []);
 
   // Every team-wide read is skipped for own-only viewers so they never fire a
   // request that would just 403.
@@ -125,6 +166,7 @@ export default function PayrollPage() {
 
   const [deleteSalary] = useDeleteSalaryMutation();
   const [downloadingReport, setDownloadingReport] = useState(false);
+  const accessToken = useAppSelector((s) => s.auth.accessToken);
 
   const handleDownloadReport = async () => {
     if (!monthFilter) {
@@ -132,7 +174,7 @@ export default function PayrollPage() {
       return;
     }
     setDownloadingReport(true);
-    await downloadMonthlyReport(monthFilter, toast);
+    await downloadMonthlyReport(monthFilter, accessToken, toast);
     setDownloadingReport(false);
   };
 
@@ -247,18 +289,15 @@ export default function PayrollPage() {
             <option value="cancelled">Cancelled</option>
           </Select>
         </div>
-        <div className="w-44 flex items-center gap-2">
-          <input
-            type="month"
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="h-9 w-full rounded-md px-3 text-sm"
-            style={{
-              background: "var(--color-surface-card)",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-text-primary)",
-            }}
-          />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openMonthPicker}
+            className="h-9 px-3 rounded-md border border-gray-300 bg-white text-sm inline-flex items-center gap-2 text-gray-900"
+          >
+            <CalendarDays className="h-4 w-4 text-indigo-600" />
+            {monthFilter ? monthFilterLabel(monthFilter) : "All months"}
+          </button>
           {monthFilter && (
             <button
               type="button"
@@ -447,6 +486,55 @@ export default function PayrollPage() {
         confirmLabel="Delete"
         onConfirm={confirmDelete}
       />
+
+      <Modal
+        open={monthPickerOpen}
+        onClose={() => setMonthPickerOpen(false)}
+        title="Select Month"
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setMonthPickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="!bg-indigo-600 !text-white hover:!bg-indigo-700"
+              onClick={applyMonthPicker}
+            >
+              Apply
+            </Button>
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Month</Label>
+            <Select
+              value={pickerMonth}
+              onChange={(e) => setPickerMonth(Number(e.target.value))}
+            >
+              {MONTH_NAMES.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Year</Label>
+            <Select
+              value={pickerYear}
+              onChange={(e) => setPickerYear(Number(e.target.value))}
+            >
+              {pickerYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

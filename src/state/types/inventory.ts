@@ -40,6 +40,19 @@ export interface ProductVariantResponse {
   images: ProductImageResponse[];
 }
 
+/**
+ * POST /products/{product_id}/variants — JSON. `product_id` comes from the
+ * path, not the body. Images have their own sub-routes, as on products.
+ */
+export interface ProductVariantCreate {
+  sku?: string | null;
+  specs?: Record<string, unknown>;
+  price: number;
+  stock_quantity?: number;
+}
+
+export type ProductVariantUpdate = Partial<ProductVariantCreate>;
+
 export interface ProductResponse {
   product_id: number;
   company_id: number;
@@ -278,4 +291,54 @@ export interface DashboardStatsResponse {
   stock_value: DashboardStatBlock;
   expenses: DashboardStatBlock;
   revenue: DashboardStatBlock;
+}
+
+// ── Supplier product prices ─────────────────────────────
+// Transcribed from app/schemas/schema.py.
+export interface ProductBrief {
+  product_id: number;
+  name: string;
+}
+
+export interface SupplierBrief {
+  supplier_id: number;
+  name: string;
+}
+
+export interface ProductVariantBrief {
+  variant_id: number;
+  sku?: string | null;
+  product: ProductBrief;
+}
+
+export interface SupplierProductPriceResponse {
+  price_id: number;
+  supplier_id: number;
+  variant_id: number;
+  unit_price: string | number;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+  variant: ProductVariantBrief;
+  supplier: SupplierBrief;
+}
+
+/** POST /supplier-prices/ — 409s if a price for this supplier+variant already exists. */
+export interface SupplierProductPriceCreate {
+  supplier_id: number;
+  variant_id: number;
+  unit_price: number | string;
+  note?: string | null;
+}
+
+/** PATCH /supplier-prices/{id} — every field optional. */
+export interface SupplierProductPriceUpdate {
+  unit_price?: number | string;
+  note?: string | null;
+}
+
+/** GET /supplier-prices/by-supplier/{supplier_id}/categories */
+export interface CategoryBrief {
+  category_id: number;
+  category_name: string;
 }

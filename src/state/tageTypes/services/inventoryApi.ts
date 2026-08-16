@@ -1,5 +1,6 @@
 import { api } from "@/state/api";
 import type {
+  CategoryBrief,
   CategoryResponse,
   CustomerForm,
   CustomerResponse,
@@ -11,10 +12,16 @@ import type {
   ProductImageResponse,
   ProductResponse,
   ProductUpdate,
+  ProductVariantCreate,
+  ProductVariantResponse,
+  ProductVariantUpdate,
   StockMovementCreate,
   StockMovementResponse,
   StockReportResponse,
   SupplierForm,
+  SupplierProductPriceCreate,
+  SupplierProductPriceResponse,
+  SupplierProductPriceUpdate,
   SupplierResponse,
 } from "@/state/types/inventory";
 
@@ -85,6 +92,77 @@ export const inventoryApi = api.injectEndpoints({
     deleteSupplier: build.mutation<{ message?: string }, number>({
       query: (id) => ({ url: `/suppliers/${id}`, method: "DELETE" }),
       invalidatesTags: [{ type: "Inventory", id: "SUPPLIERS" }],
+    }),
+
+    // ═══════════════ SUPPLIER PRODUCT PRICES (all require_manager) ═════
+    // What a given supplier charges per product variant — the per-supplier
+    // "Supplier Prices" list.
+    getSupplierPrices: build.query<
+      SupplierProductPriceResponse[],
+      { supplierId?: number; variantId?: number } | void
+    >({
+      query: (args) => ({
+        url: "/supplier-prices/",
+        params: {
+          ...(args?.supplierId != null ? { supplier_id: args.supplierId } : {}),
+          ...(args?.variantId != null ? { variant_id: args.variantId } : {}),
+        },
+      }),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((p) => ({
+                type: "Inventory" as const,
+                id: `SUP_PRICE-${p.price_id}`,
+              })),
+              { type: "Inventory" as const, id: "SUP_PRICE_LIST" },
+            ]
+          : [{ type: "Inventory" as const, id: "SUP_PRICE_LIST" }],
+    }),
+
+    getSupplierPrice: build.query<SupplierProductPriceResponse, number>({
+      query: (priceId) => `/supplier-prices/${priceId}`,
+      providesTags: (_r, _e, id) => [{ type: "Inventory", id: `SUP_PRICE-${id}` }],
+    }),
+
+    /** 409s if a price for this supplier+variant pair already exists. */
+    createSupplierPrice: build.mutation<
+      SupplierProductPriceResponse,
+      SupplierProductPriceCreate
+    >({
+      query: (body) => ({ url: "/supplier-prices/", method: "POST", body }),
+      invalidatesTags: [{ type: "Inventory", id: "SUP_PRICE_LIST" }],
+    }),
+
+    updateSupplierPrice: build.mutation<
+      SupplierProductPriceResponse,
+      { priceId: number; data: SupplierProductPriceUpdate }
+    >({
+      query: ({ priceId, data }) => ({
+        url: `/supplier-prices/${priceId}`,
+        method: "PATCH",
+        body: data,
+      }),
+      invalidatesTags: (_r, _e, { priceId }) => [
+        { type: "Inventory", id: `SUP_PRICE-${priceId}` },
+        { type: "Inventory", id: "SUP_PRICE_LIST" },
+      ],
+    }),
+
+    deleteSupplierPrice: build.mutation<void, number>({
+      query: (priceId) => ({ url: `/supplier-prices/${priceId}`, method: "DELETE" }),
+      invalidatesTags: (_r, _e, priceId) => [
+        { type: "Inventory", id: `SUP_PRICE-${priceId}` },
+        { type: "Inventory", id: "SUP_PRICE_LIST" },
+      ],
+    }),
+
+    /** Categories represented among a supplier's priced variants. */
+    getSupplierPriceCategories: build.query<CategoryBrief[], number>({
+      query: (supplierId) => `/supplier-prices/by-supplier/${supplierId}/categories`,
+      providesTags: (_r, _e, supplierId) => [
+        { type: "Inventory", id: `SUP_PRICE_CATEGORIES-${supplierId}` },
+      ],
     }),
 
     // ═══════════════ CUSTOMERS ═════════════════════════════
@@ -279,6 +357,139 @@ export const inventoryApi = api.injectEndpoints({
         method: "DELETE",
       }),
       invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+      ],
+    }),
+
+    // ═══════════════ PRODUCT VARIANTS ══════════════════════
+    // Nested under /products/{product_id}/variants. Reads are require_login;
+    // every write is require_manager. Invalidating the parent product tag is
+    // what refreshes the variant list, since variants ride on the product.
+    getVariants: build.query<ProductVariantResponse[], number>({
+      query: (productId) => `/products/${productId}/variants/`,
+      providesTags: (_r, _e, productId) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+      ],
+    }),
+
+    getVariant: build.query<
+      ProductVariantResponse,
+      { productId: number; variantId: number }
+    >({
+      query: ({ productId, variantId }) =>
+        `/products/${productId}/variants/${variantId}`,
+      providesTags: (_r, _e, { variantId }) => [
+        { type: "Inventory", id: `VAR-${variantId}` },
+      ],
+    }),
+
+    createVariant: build.mutation<
+      ProductVariantResponse,
+      { productId: number; body: ProductVariantCreate }
+    >({
+      query: ({ productId, body }) => ({
+        url: `/products/${productId}/variants/`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+      ],
+    }),
+
+    updateVariant: build.mutation<
+      ProductVariantResponse,
+      { productId: number; variantId: number; body: ProductVariantUpdate }
+    >({
+      query: ({ productId, variantId, body }) => ({
+        url: `/products/${productId}/variants/${variantId}`,
+        method: "PATCH",
+        body,
+      }),
+      invalidatesTags: (_r, _e, { productId, variantId }) => [
+        { type: "Inventory", id: `VAR-${variantId}` },
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+      ],
+    }),
+
+    /** 204 No Content — fetchBaseQuery yields null for the empty body. */
+    deleteVariant: build.mutation<
+      void,
+      { productId: number; variantId: number }
+    >({
+      query: ({ productId, variantId }) => ({
+        url: `/products/${productId}/variants/${variantId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+        // Deleting a variant removes its movements from the report's scope.
+        { type: "Inventory", id: "REPORT" },
+      ],
+    }),
+
+    // ── variant images ───────────────────────────────────
+    addVariantImage: build.mutation<
+      ProductImageResponse,
+      {
+        productId: number;
+        variantId: number;
+        image: File;
+        is_primary?: boolean;
+        sort_order?: number;
+      }
+    >({
+      query: ({ productId, variantId, image, is_primary = false, sort_order = 0 }) => {
+        const form = new FormData();
+        form.append("image", image);
+        // false and 0 are meaningful, so these bypass toForm's empty skipping.
+        form.append("is_primary", String(is_primary));
+        form.append("sort_order", String(sort_order));
+        return {
+          url: `/products/${productId}/variants/${variantId}/images`,
+          method: "POST",
+          body: form,
+        };
+      },
+      invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+      ],
+    }),
+
+    setPrimaryVariantImage: build.mutation<
+      ProductImageResponse,
+      { productId: number; variantId: number; imageId: number }
+    >({
+      query: ({ productId, variantId, imageId }) => ({
+        url: `/products/${productId}/variants/${variantId}/images/${imageId}/set-primary`,
+        method: "PATCH",
+      }),
+      invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
+        { type: "Inventory", id: productId },
+        { type: "Inventory", id: "PRODUCTS" },
+      ],
+    }),
+
+    deleteVariantImage: build.mutation<
+      { message?: string },
+      { productId: number; variantId: number; imageId: number }
+    >({
+      query: ({ productId, variantId, imageId }) => ({
+        url: `/products/${productId}/variants/${variantId}/images/${imageId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: (_r, _e, { productId }) => [
+        { type: "Inventory", id: `VARIANTS-${productId}` },
         { type: "Inventory", id: productId },
         { type: "Inventory", id: "PRODUCTS" },
       ],
@@ -481,6 +692,12 @@ export const {
   useGetSupplierQuery,
   useCreateSupplierMutation,
   useUpdateSupplierMutation,
+  useGetSupplierPricesQuery,
+  useGetSupplierPriceQuery,
+  useCreateSupplierPriceMutation,
+  useUpdateSupplierPriceMutation,
+  useDeleteSupplierPriceMutation,
+  useGetSupplierPriceCategoriesQuery,
   useDeleteSupplierAvatarMutation,
   useDeleteSupplierMutation,
   useGetCustomersQuery,
@@ -503,6 +720,14 @@ export const {
   useAddProductImageMutation,
   useSetPrimaryProductImageMutation,
   useDeleteProductImageMutation,
+  useGetVariantsQuery,
+  useGetVariantQuery,
+  useCreateVariantMutation,
+  useUpdateVariantMutation,
+  useDeleteVariantMutation,
+  useAddVariantImageMutation,
+  useSetPrimaryVariantImageMutation,
+  useDeleteVariantImageMutation,
   useGetStockMovementsQuery,
   useGetStockReportQuery,
   useCreateStockMovementMutation,

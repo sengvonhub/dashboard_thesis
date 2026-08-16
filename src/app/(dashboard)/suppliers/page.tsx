@@ -20,6 +20,8 @@ import {
   useUpdateSupplierMutation,
 } from "@/state/tageTypes/services/inventoryApi";
 import type { SupplierResponse } from "@/state/types/inventory";
+import { useConfirm } from "@/app/(components)/crud/confirm";
+import SupplierDetailDialog from "@/app/(components)/Inventory/SupplierDetailDialog";
 
 const EMPTY = {
   name: "",
@@ -31,6 +33,7 @@ const EMPTY = {
 };
 
 export default function SuppliersPage() {
+  const confirm = useConfirm();
   const { data: suppliers, isLoading, error: loadError } = useGetSuppliersQuery();
   const [createSupplier, { isLoading: creating }] = useCreateSupplierMutation();
   const [updateSupplier, { isLoading: updating }] = useUpdateSupplierMutation();
@@ -38,6 +41,7 @@ export default function SuppliersPage() {
 
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<SupplierResponse | null>(null);
+  const [detail, setDetail] = useState<SupplierResponse | null>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [avatar, setAvatar] = useState<File | null>(null);
@@ -104,7 +108,12 @@ export default function SuppliersPage() {
   };
 
   const onDelete = async (s: SupplierResponse) => {
-    if (!window.confirm(`Delete supplier “${s.name}”?`)) return;
+    const ok = await confirm({
+      title: `Delete ${s.name}`,
+      message: "This supplier will be removed.",
+      confirmLabel: "Delete supplier",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteSupplier(s.supplier_id).unwrap();
@@ -146,7 +155,11 @@ export default function SuppliersPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((s) => (
-            <Card key={s.supplier_id} className="p-4 flex flex-col gap-3">
+            <Card
+              key={s.supplier_id}
+              className="p-4 flex flex-col gap-3 text-left cursor-pointer w-full"
+              onClick={() => setDetail(s)}
+            >
               <div className="flex items-start gap-3">
                 <div
                   className="h-12 w-12 rounded-full overflow-hidden flex items-center justify-center shrink-0"
@@ -187,7 +200,7 @@ export default function SuppliersPage() {
                   )}
                 </div>
 
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     onClick={() => openEdit(s)}
@@ -286,6 +299,17 @@ export default function SuppliersPage() {
             <TextField label="Address" value={form.address} onChange={set("address")} />
           </div>
         </Dialog>
+      )}
+
+      {detail && (
+        <SupplierDetailDialog
+          supplier={detail}
+          onClose={() => setDetail(null)}
+          onEdit={() => {
+            openEdit(detail);
+            setDetail(null);
+          }}
+        />
       )}
     </div>
   );

@@ -12,12 +12,17 @@ import {
   Phone,
   MapPin,
   User,
+  Users,
   AtSign,
   Lock,
   Eye,
   EyeOff,
-  ArrowRight,
 } from "lucide-react";
+import {
+  AuthError,
+  AuthLogo,
+  AuthSubmit,
+} from "@/app/(components)/Auth/AuthShell";
 import { useAppDispatch } from "@/app/redux";
 import { setCredentials } from "@/state/authSlice";
 import { RegisterCompanyFormValues, registerCompanySchema } from "@/state/validation/auth/authvalidation";
@@ -42,6 +47,7 @@ export default function RegisterCompanyPage() {
   const companyName = watch("company_name");
   const companyCode = watch("company_code");
   const adminUsername = watch("admin_username");
+  const maxUsers = watch("max_users");
 
   const slug = useMemo(
     () => (companyCode || "your-code").toLowerCase().replace(/[^a-z0-9-]/g, ""),
@@ -53,9 +59,6 @@ export default function RegisterCompanyPage() {
       const { confirmPassword: _confirmPassword, ...payload } = values;
 
       const result = await registerCompany(payload).unwrap();
-
-      // authSlice now stores refresh token + expiry timestamps alongside
-      // the access token.
       dispatch(
         setCredentials({
           accessToken: result.access_token,
@@ -74,50 +77,96 @@ export default function RegisterCompanyPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#0D1117] text-[#E8ECF4] flex items-center justify-center p-4 sm:p-6 lg:p-10">
+    <div
+      className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 lg:p-10"
+      style={{ background: "var(--color-bg)", color: "var(--color-text-primary)" }}
+    >
       <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6">
         {/* ---------- Left: live preview ---------- */}
-        <div className="relative overflow-hidden rounded-2xl border border-[#2A3350] bg-[#1C2333] p-6 sm:p-8 flex flex-col justify-between">
+        <div
+          className="relative overflow-hidden rounded-2xl border p-6 sm:p-8 flex flex-col justify-between"
+          style={{
+            background: "var(--color-surface-elevated)",
+            borderColor: "var(--color-border)",
+          }}
+        >
           <div
-            className="absolute inset-0 opacity-[0.15] pointer-events-none"
-            style={{
-              background: "linear-gradient(135deg, #6D28D9 0%, #7C6FF7 50%, #4338CA 100%)",
-            }}
+            className="absolute inset-0 opacity-[0.12] pointer-events-none"
+            style={{ background: "var(--gradient-brand)" }}
           />
           <div className="relative">
-            <span className="inline-block text-[11px] font-mono tracking-widest text-[#7C6FF7] uppercase mb-4">
+            <AuthLogo size={48} />
+            <span
+              className="block text-[11px] font-mono tracking-widest uppercase mt-4 mb-2"
+              style={{ color: "var(--color-blurple)" }}
+            >
               New workspace
             </span>
-            <h1 className="text-2xl font-semibold text-[#E8ECF4] tracking-tight leading-snug">
+            <h1
+              className="text-2xl font-semibold tracking-tight leading-snug"
+              style={{ color: "var(--color-text-primary)" }}
+            >
               {companyName || "Untitled company"}
             </h1>
-            <p className="mt-1 text-sm font-mono text-[#8892B0]">
-              bizcore.app/<span className="text-[#7C6FF7]">{slug}</span>
+            <p
+              className="mt-1 text-sm font-mono"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              bizcore.app/
+              <span style={{ color: "var(--color-blurple)" }}>{slug}</span>
             </p>
 
             <div className="mt-8 space-y-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-[#5A6480]">Admin</span>
-                <span className="font-mono text-[#E8ECF4]">{adminUsername || "—"}</span>
+                <span style={{ color: "var(--color-text-muted)" }}>Admin</span>
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {adminUsername || "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#5A6480]">Plan</span>
-                <span className="font-mono text-[#E8ECF4]">Assigned on creation</span>
+                <span style={{ color: "var(--color-text-muted)" }}>Max users</span>
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  {maxUsers ? maxUsers : "Unlimited"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span style={{ color: "var(--color-text-muted)" }}>Plan</span>
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--color-text-primary)" }}
+                >
+                  Assigned on creation
+                </span>
               </div>
             </div>
           </div>
 
-          <p className="relative mt-10 text-xs text-[#5A6480] leading-relaxed">
-            Plan, status, and seat limit are set by the server — you're
+          <p
+            className="relative mt-10 text-xs leading-relaxed"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            Plan, status, and seat limit are set by the server — you&apos;re
             signed in automatically once the workspace is created.
           </p>
         </div>
 
         {/* ---------- Right: form ---------- */}
-        <div className="rounded-2xl border border-[#2A3350] bg-[#1C2333] p-5 sm:p-8">
+        <div
+          className="rounded-2xl border p-5 sm:p-8"
+          style={{
+            background: "var(--color-surface-elevated)",
+            borderColor: "var(--color-border)",
+          }}
+        >
           {errors.root && (
-            <div className="mb-5 rounded-xl bg-[#F8717126] border border-[#F87171]/40 p-3 text-xs text-[#F87171]">
-              {errors.root.message}
+            <div className="mb-5">
+              <AuthError message={errors.root.message ?? ""} />
             </div>
           )}
 
@@ -158,6 +207,13 @@ export default function RegisterCompanyPage() {
                   registration={register("address")}
                 />
               </div>
+              <Field
+                icon={<Users />}
+                type="number"
+                placeholder="Max users (optional)"
+                error={errors.max_users?.message}
+                registration={register("max_users", { valueAsNumber: true })}
+              />  
             </FormSection>
 
             <FormSection index="02" title="Admin account">
@@ -176,7 +232,10 @@ export default function RegisterCompanyPage() {
                 />
                 <div>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5A6480]">
+                    <span
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
                       <Lock className="h-4 w-4" />
                     </span>
                     <input
@@ -184,18 +243,29 @@ export default function RegisterCompanyPage() {
                       autoComplete="new-password"
                       placeholder="Password"
                       {...register("admin_password")}
-                      className="w-full rounded-xl bg-[#161B27] border border-[#2A3350] pl-10 pr-10 py-3 text-sm text-[#E8ECF4] placeholder-[#5A6480] focus:border-[#7C6FF7] focus:outline-none focus:ring-1 focus:ring-[#7C6FF7]"
+                      className="w-full rounded-xl border pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-1"
+                      style={{
+                        background: "var(--color-surface-card)",
+                        borderColor: errors.admin_password
+                          ? "var(--color-error)"
+                          : "var(--color-border)",
+                        color: "var(--color-text-primary)",
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#5A6480] hover:text-[#E8ECF4]"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2"
+                      style={{ color: "var(--color-text-muted)" }}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   {errors.admin_password && (
-                    <p className="mt-1 text-xs text-[#F87171]">{errors.admin_password.message}</p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--color-error)" }}>
+                      {errors.admin_password.message}
+                    </p>
                   )}
                 </div>
               </div>
@@ -208,24 +278,23 @@ export default function RegisterCompanyPage() {
               />
             </FormSection>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group w-full flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white transition-all focus:outline-none focus:ring-2 focus:ring-[#7C6FF7] focus:ring-offset-2 focus:ring-offset-[#1C2333] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                background: "linear-gradient(135deg, #6D28D9 0%, #7C6FF7 50%, #4338CA 100%)",
-              }}
-            >
-              {isLoading ? "Creating workspace..." : "Create workspace"}
-              {!isLoading && (
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              )}
-            </button>
+            <AuthSubmit
+              loading={isLoading}
+              label="Create workspace"
+              loadingLabel="Creating workspace..."
+            />
           </form>
 
-          <p className="mt-6 text-center text-sm text-[#8892B0]">
+          <p
+            className="mt-6 text-center text-sm"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
             Already registered?{" "}
-            <Link href="/login" className="font-medium text-[#7C6FF7] hover:underline">
+            <Link
+              href="/login"
+              className="font-medium hover:underline"
+              style={{ color: "var(--color-blurple)" }}
+            >
               Sign in
             </Link>
           </p>
@@ -247,9 +316,22 @@ function FormSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono text-[#5A6480]">{index}</span>
-        <h2 className="text-xs font-semibold tracking-wider text-[#7C6FF7] uppercase">{title}</h2>
-        <div className="h-px flex-1 bg-[#2A3350]" />
+        <span
+          className="text-[11px] font-mono"
+          style={{ color: "var(--color-text-muted)" }}
+        >
+          {index}
+        </span>
+        <h2
+          className="text-xs font-semibold tracking-wider uppercase"
+          style={{ color: "var(--color-blurple)" }}
+        >
+          {title}
+        </h2>
+        <div
+          className="h-px flex-1"
+          style={{ background: "var(--color-divider)" }}
+        />
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -273,17 +355,29 @@ function Field({
   return (
     <div>
       <div className="relative">
-        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#5A6480] [&>svg]:h-4 [&>svg]:w-4">
+        <span
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none [&>svg]:h-4 [&>svg]:w-4"
+          style={{ color: "var(--color-text-muted)" }}
+        >
           {icon}
         </span>
         <input
           type={type}
           placeholder={placeholder}
           {...registration}
-          className="w-full rounded-xl bg-[#161B27] border border-[#2A3350] pl-10 pr-3 py-3 text-sm text-[#E8ECF4] placeholder-[#5A6480] focus:border-[#7C6FF7] focus:outline-none focus:ring-1 focus:ring-[#7C6FF7]"
+          className="w-full rounded-xl border pl-10 pr-3 py-3 text-sm focus:outline-none focus:ring-1"
+          style={{
+            background: "var(--color-surface-card)",
+            borderColor: error ? "var(--color-error)" : "var(--color-border)",
+            color: "var(--color-text-primary)",
+          }}
         />
       </div>
-      {error && <p className="mt-1 text-xs text-[#F87171]">{error}</p>}
+      {error && (
+        <p className="mt-1 text-xs" style={{ color: "var(--color-error)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

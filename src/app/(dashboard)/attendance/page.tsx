@@ -4,8 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Download,
   FileText,
-  LogIn,
-  LogOut,
+  Filter,
   Search,
   Settings,
   Sheet,
@@ -13,8 +12,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import ScanDialog, { type ScanMode } from "@/app/(components)/Attendance/ScanDialog";
 import AttendanceDetailDialog from "@/app/(components)/Attendance/AttendanceDetailDialog";
+import { Card } from "@/app/(components)/crud";
 import AttendanceSettingsDialog from "@/app/(components)/Attendance/AttendanceSettingsDialog";
 import {
   AttendanceRow,
@@ -58,7 +57,6 @@ export default function AttendancePage() {
 
   const now = new Date();
   const [tab, setTab] = useState<Tab>(hasStaffRecord ? "mine" : "manager");
-  const [scanMode, setScanMode] = useState<ScanMode | null>(null);
   const [detail, setDetail] = useState<AttendanceResponse | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -74,6 +72,11 @@ export default function AttendancePage() {
   // Manager-view "Today" filter — null means "show the whole month".
   // Holds an ISO date string (YYYY-MM-DD) when active.
   const [dayFilter, setDayFilter] = useState<string | null>(null);
+
+  // Manager-view row filter by check status. "in" = checked in but not out
+  // yet, "out" = has a check-out time.
+  const [statusFilter, setStatusFilter] = useState<"all" | "in" | "out">("all");
+  const [statusOpen, setStatusOpen] = useState(false);
 
   // ── data ───────────────────────────────────────────────
   // Query args MUST be memoised. An object literal is a new reference on every
@@ -104,9 +107,6 @@ export default function AttendancePage() {
   );
 
   const todayIso = now.toISOString().slice(0, 10);
-  const todayRecord = myRecords?.find((r) => r.date?.slice(0, 10) === todayIso);
-  const checkedIn = Boolean(todayRecord?.check_in_time);
-  const checkedOut = Boolean(todayRecord?.check_out_time);
 
   // Dismiss the export menu on any outside click.
   useEffect(() => {
@@ -115,6 +115,14 @@ export default function AttendancePage() {
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [exportOpen]);
+
+  // Dismiss the status filter menu on any outside click.
+  useEffect(() => {
+    if (!statusOpen) return;
+    const close = () => setStatusOpen(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [statusOpen]);
 
   const filteredAll = useMemo(() => {
     if (!allRecords) return [];
@@ -127,6 +135,12 @@ export default function AttendancePage() {
       rows = rows.filter((r) => r.date?.slice(0, 10) === dayFilter);
     }
 
+    if (statusFilter === "in") {
+      rows = rows.filter((r) => r.check_in_time && !r.check_out_time);
+    } else if (statusFilter === "out") {
+      rows = rows.filter((r) => r.check_out_time);
+    }
+
     const q = search.trim().toLowerCase();
     if (q) {
       rows = rows.filter((r) =>
@@ -134,7 +148,7 @@ export default function AttendancePage() {
       );
     }
     return rows;
-  }, [allRecords, search, dayFilter]);
+  }, [allRecords, search, dayFilter, statusFilter]);
 
   /**
    * Jump the manager view to today.
@@ -265,60 +279,12 @@ export default function AttendancePage() {
 
   return (
     <div className="flex flex-col gap-4 pb-10">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <h1
-          className="text-xl font-semibold"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          Attendance
-        </h1>
-
-        <div className="flex gap-2 items-center">
-          {/* Geofence and policy govern every scan, so this is manager-only. */}
-          {canViewAll && (
-            <button
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Attendance settings"
-              className="h-10 w-10 rounded-xl flex items-center justify-center border"
-              style={{
-                borderColor: "var(--color-border)",
-                color: "var(--color-text-secondary)",
-              }}
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          )}
-
-          {hasStaffRecord && (
-            <>
-            <button
-              onClick={() => setScanMode("in")}
-              disabled={checkedIn}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: "var(--color-success)",
-                color: "var(--color-on-success)",
-              }}
-            >
-              <LogIn className="h-4 w-4" />
-              {checkedIn ? "Checked in" : "Check in"}
-            </button>
-            <button
-              onClick={() => setScanMode("out")}
-              disabled={!checkedIn || checkedOut}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold border disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                borderColor: "var(--color-border)",
-                color: "var(--color-text-primary)",
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              {checkedOut ? "Checked out" : "Check out"}
-            </button>
-            </>
-          )}
-        </div>
-      </div>
+      <h1
+        className="text-xl font-semibold"
+        style={{ color: "var(--color-text-primary)" }}
+      >
+        Attendance
+      </h1>
 
       {/* TABS — Manager View only renders for managers/admins/superusers */}
       {tabs.length > 0 && (
@@ -361,7 +327,7 @@ export default function AttendancePage() {
 
       {/* ── MY ATTENDANCE ── */}
       {tab === "mine" && hasStaffRecord && (
-        <div>
+        <div className="flex flex-col gap-4">
           <MonthNav
             month={myMonth}
             year={myYear}
@@ -377,7 +343,7 @@ export default function AttendancePage() {
             stillIn={myStats?.still_in ?? 0}
           />
 
-          <div className="mt-1">
+          <Card className="overflow-hidden">
             {myLoading ? (
               <p
                 className="py-10 text-sm text-center"
@@ -402,13 +368,13 @@ export default function AttendancePage() {
                 />
               ))
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       {/* ── MANAGER VIEW ── */}
       {tab === "manager" && canViewAll && (
-        <div>
+        <div className="flex flex-col gap-4">
           {/* Today across the company, straight from /summary/today */}
           <StatsRow
             present={summary?.total_present ?? 0}
@@ -429,6 +395,17 @@ export default function AttendancePage() {
             }}
             trailing={
               <div className="flex items-center gap-1 shrink-0">
+                {/* Geofence and policy govern every scan, so this is manager-only. */}
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Attendance settings"
+                  className="h-8 w-8 rounded-lg flex items-center justify-center"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+
                 <button
                   type="button"
                   onClick={dayFilter ? clearDayFilter : showToday}
@@ -442,6 +419,70 @@ export default function AttendancePage() {
                 >
                   {dayFilter ? "Today ✕" : "Today"}
                 </button>
+
+                {/* Filter the visible rows to who's still checked in vs who's
+                    already checked out. */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStatusOpen((v) => !v);
+                    }}
+                    aria-label="Filter by check status"
+                    aria-haspopup="menu"
+                    aria-expanded={statusOpen}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center"
+                    style={{
+                      color:
+                        statusOpen || statusFilter !== "all"
+                          ? "var(--color-blurple)"
+                          : "var(--color-text-secondary)",
+                    }}
+                  >
+                    <Filter className="h-4 w-4" />
+                  </button>
+
+                  {statusOpen && (
+                    <div
+                      role="menu"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-full mt-1 w-44 rounded-xl border overflow-hidden z-30"
+                      style={{
+                        background: "var(--color-surface-elevated)",
+                        borderColor: "var(--color-border)",
+                        boxShadow: "0 12px 32px -12px rgba(0,0,0,0.45)",
+                      }}
+                    >
+                      {(
+                        [
+                          { id: "all", label: "All" },
+                          { id: "in", label: "Still checked in" },
+                          { id: "out", label: "Checked out" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setStatusFilter(opt.id);
+                            setStatusOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between px-3.5 py-2.5 text-sm text-left"
+                          style={{
+                            color:
+                              statusFilter === opt.id
+                                ? "var(--color-blurple)"
+                                : "var(--color-text-secondary)",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="relative">
                   <button
@@ -572,7 +613,7 @@ export default function AttendancePage() {
             />
           )}
 
-          <div className="mt-1">
+          <Card className="overflow-hidden">
             {allLoading ? (
               <p
                 className="py-10 text-sm text-center"
@@ -587,9 +628,13 @@ export default function AttendancePage() {
               >
                 {search
                   ? `No staff matching "${search}".`
-                  : dayFilter
-                    ? "No check-ins recorded today yet."
-                    : `No attendance recorded in ${monthLabel(mgrMonth, mgrYear)}.`}
+                  : statusFilter === "in"
+                    ? "No one is still checked in."
+                    : statusFilter === "out"
+                      ? "No one has checked out yet."
+                      : dayFilter
+                        ? "No check-ins recorded today yet."
+                        : `No attendance recorded in ${monthLabel(mgrMonth, mgrYear)}.`}
               </p>
             ) : (
               filteredAll.map((r) => (
@@ -602,14 +647,10 @@ export default function AttendancePage() {
                 />
               ))
             )}
-          </div>
-
+          </Card>
         </div>
       )}
 
-      {scanMode && (
-        <ScanDialog mode={scanMode} onClose={() => setScanMode(null)} />
-      )}
       {detail && (
         <AttendanceDetailDialog
           record={detail}

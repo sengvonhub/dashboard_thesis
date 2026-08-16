@@ -7,6 +7,7 @@ import {
   useGetStaffRolesQuery,
   useUpdateStaffMutation,
 } from "@/state/tageTypes/services/staffApi";
+import { useGetUsersQuery } from "@/state/tageTypes/services/usersApi";
 import type { StaffResponse } from "@/state/types/user";
 
 const apiMessage = (err: unknown, fallback: string) => {
@@ -66,6 +67,10 @@ export default function StaffFormDialog({
 }) {
   const isEdit = Boolean(staff);
   const { data: roles } = useGetStaffRolesQuery();
+  // Only needed to link a user account when creating — the update route
+  // (StaffUpdateForm) has no user_id field, so this is create-only.
+  const { data: usersPage } = useGetUsersQuery({ limit: 20 }, { skip: isEdit });
+  const linkableUsers = (usersPage?.items ?? []).filter((u) => !u.staff);
   const [createStaff, { isLoading: creating }] = useCreateStaffMutation();
   const [updateStaff, { isLoading: updating }] = useUpdateStaffMutation();
   const saving = creating || updating;
@@ -78,6 +83,7 @@ export default function StaffFormDialog({
     date_of_birth: "",
     address: "",
     staff_role_id: "",
+    user_id: "",
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -94,6 +100,7 @@ export default function StaffFormDialog({
       date_of_birth: staff.date_of_birth ? staff.date_of_birth.slice(0, 10) : "",
       address: staff.address ?? "",
       staff_role_id: staff.staff_role_id != null ? String(staff.staff_role_id) : "",
+      user_id: staff.user_id != null ? String(staff.user_id) : "",
     });
   }, [staff]);
 
@@ -152,6 +159,7 @@ export default function StaffFormDialog({
         await createStaff({
           name: form.name.trim(),
           staff_role_id: roleId,
+          user_id: form.user_id ? Number(form.user_id) : null,
           gender: (form.gender || null) as never,
           date_of_birth: form.date_of_birth || null,
           address: form.address || null,
@@ -208,7 +216,7 @@ export default function StaffFormDialog({
         </div>
 
         <form onSubmit={onSubmit} className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
             {/* avatar — edit only, since POST /staff/ takes no upload */}
             {isEdit && (
               <div className="flex items-center gap-4">
@@ -294,6 +302,34 @@ export default function StaffFormDialog({
                   ))}
                 </select>
               </label>
+
+              {!isEdit && (
+                <label className="flex flex-col gap-1.5">
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    Link to user account
+                  </span>
+                  <select
+                    value={form.user_id}
+                    onChange={(e) => set("user_id")(e.target.value)}
+                    className="rounded-xl border px-3 py-2.5 text-sm focus:outline-none"
+                    style={{
+                      background: "var(--color-surface)",
+                      borderColor: "var(--color-border)",
+                      color: "var(--color-text-primary)",
+                    }}
+                  >
+                    <option value="">— none —</option>
+                    {linkableUsers.map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.full_name} ({u.username})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <Field label="Email" type="email" value={form.email} onChange={set("email")} />
               <Field label="Phone" value={form.phone} onChange={set("phone")} />

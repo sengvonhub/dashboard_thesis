@@ -4,6 +4,24 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Archive, ArrowDown, ArrowUp, CreditCard, Receipt, TrendingUp } from "lucide-react";
 import { MODULES } from "@/app/config/module";
+import { useGetDashboardStatsQuery } from "@/state/tageTypes/services/inventoryApi";
+import { apiMessage } from "@/app/(components)/crud";
+
+// A sparkline needs at least 2 points to divide the width into steps.
+function safeTrend(spark: number[] | undefined, fallback: number): number[] {
+  if (spark && spark.length >= 2) return spark;
+  return [fallback, fallback];
+}
+
+function money(value: number | undefined): string {
+  const n = Number(value ?? 0);
+  return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+
+function pctLabel(pct: number | null | undefined): string {
+  const n = pct ?? 0;
+  return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
 
 function sparklinePath(points: number[], width: number, height: number) {
   const max = Math.max(...points);
@@ -106,10 +124,7 @@ function StatCard({
 }
 
 export default function DashboardHome() {
-  const stockTrend = useMemo(() => [1400, 1520, 1480, 1610, 1590, 1650, 1701], []);
-  const flatTrend = useMemo(() => [1, 1, 1, 1, 1, 1, 1], []);
-  const expensesTrend = useMemo(() => [0, 0, 0, 0, 0, 0, 0], []);
-  const revenueTrend = useMemo(() => [50, 50, 50, 3860, 50, 50, 50], []);
+  const { data: stats, isLoading, error } = useGetDashboardStatsQuery();
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -133,48 +148,80 @@ export default function DashboardHome() {
         </div>
       </div>
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={TrendingUp}
-          iconTint="#22C55E"
-          label="Stock"
-          value="1,701"
-          changeLabel="0.0%"
-          sublabel="current units"
-          allLabel="All: 1,701"
-          trend={stockTrend}
-          delta={{ up: "3635", down: "1934" }}
-        />
-        <StatCard
-          icon={Archive}
-          iconTint="#7C6FF7"
-          label="Stock value"
-          value="$11,559"
-          changeLabel="0.0%"
-          sublabel="inventory worth"
-          trend={flatTrend}
-        />
-        <StatCard
-          icon={Receipt}
-          iconTint="#F59E0B"
-          label="Expenses"
-          value="$0"
-          changeLabel="+0.0%"
-          sublabel="vs last period"
-          allLabel="All: $13,324"
-          trend={expensesTrend}
-        />
-        <StatCard
-          icon={CreditCard}
-          iconTint="#7C6FF7"
-          label="Revenue"
-          value="$3,860"
-          changeLabel="0.0%"
-          sublabel="this period"
-          allLabel="All: $3,860"
-          trend={revenueTrend}
-        />
-      </div>
+      {error ? (
+        <p className="text-sm" style={{ color: "var(--color-danger)" }}>
+          {apiMessage(error, "Could not load dashboard stats.")}
+        </p>
+      ) : isLoading || !stats ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-40 rounded-2xl border animate-pulse"
+              style={{ background: "var(--color-surface-card)", borderColor: "var(--color-border)" }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            icon={TrendingUp}
+            iconTint="#22C55E"
+            label="Stock"
+            value={Math.round(stats.stock.value).toLocaleString("en-US")}
+            changeLabel={pctLabel(stats.stock.badge_pct)}
+            changePositive={(stats.stock.badge_pct ?? 0) >= 0}
+            sublabel={stats.stock.sub}
+            allLabel={
+              stats.stock.all_time_value != null
+                ? `All: ${Math.round(stats.stock.all_time_value).toLocaleString("en-US")}`
+                : undefined
+            }
+            trend={safeTrend(stats.stock.spark, stats.stock.value)}
+            delta={
+              stats.stock.stock_in != null && stats.stock.stock_out != null
+                ? { up: String(stats.stock.stock_in), down: String(stats.stock.stock_out) }
+                : undefined
+            }
+          />
+          <StatCard
+            icon={Archive}
+            iconTint="#7C6FF7"
+            label="Stock value"
+            value={money(stats.stock_value.value)}
+            changeLabel={pctLabel(stats.stock_value.badge_pct)}
+            changePositive={(stats.stock_value.badge_pct ?? 0) >= 0}
+            sublabel={stats.stock_value.sub}
+            trend={safeTrend(stats.stock_value.spark, stats.stock_value.value)}
+          />
+          <StatCard
+            icon={Receipt}
+            iconTint="#F59E0B"
+            label="Expenses"
+            value={money(stats.expenses.value)}
+            changeLabel={pctLabel(stats.expenses.badge_pct)}
+            changePositive={(stats.expenses.badge_pct ?? 0) >= 0}
+            sublabel={stats.expenses.sub}
+            allLabel={
+              stats.expenses.all_time_value != null ? `All: ${money(stats.expenses.all_time_value)}` : undefined
+            }
+            trend={safeTrend(stats.expenses.spark, stats.expenses.value)}
+          />
+          <StatCard
+            icon={CreditCard}
+            iconTint="#7C6FF7"
+            label="Revenue"
+            value={money(stats.revenue.value)}
+            changeLabel={pctLabel(stats.revenue.badge_pct)}
+            changePositive={(stats.revenue.badge_pct ?? 0) >= 0}
+            sublabel={stats.revenue.sub}
+            allLabel={
+              stats.revenue.all_time_value != null ? `All: ${money(stats.revenue.all_time_value)}` : undefined
+            }
+            trend={safeTrend(stats.revenue.spark, stats.revenue.value)}
+          />
+        </div>
+      )}
 
       {/* System Modules */}
       <div>

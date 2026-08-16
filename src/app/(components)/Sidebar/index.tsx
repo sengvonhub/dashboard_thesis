@@ -1,5 +1,6 @@
 "use client";
-import { HOME_ITEM, MODULES, SYSTEM_ITEMS } from "@/app/config/module";
+import { HOME_ITEM, MODULES, SUPERUSER_ITEMS, SYSTEM_ITEMS } from "@/app/config/module";
+import { useAuth } from "@/state/tageTypes/lib/hook";
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setIsSidebarCollapsed } from "@/state";
 import { Menu, LogOut, LucideIcon } from "lucide-react";
@@ -119,6 +120,13 @@ const Sidebar = () => {
     (state) => state.global.isSidebarCollapsed
   );
 
+  // The audit log's routes are all `require_superuser`, so the link is only
+  // shown to a superuser rather than leading everyone else to a 403.
+  const { isSuperuser } = useAuth();
+  const workspaceItems = isSuperuser
+    ? [...SYSTEM_ITEMS, ...SUPERUSER_ITEMS]
+    : SYSTEM_ITEMS;
+
   const toggleSidebar = () => {
     dispatch(setIsSidebarCollapsed(!isSidebarColleapsed));
   };
@@ -179,7 +187,7 @@ const Sidebar = () => {
         ))}
 
         <SectionLabel isCollapsed={isSidebarColleapsed}>Workspace</SectionLabel>
-        {SYSTEM_ITEMS.map((item) => (
+        {workspaceItems.map((item) => (
           <SidebarLink
             key={item.href}
             href={item.href}

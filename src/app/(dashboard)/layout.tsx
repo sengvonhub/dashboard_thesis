@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import Navbar from "@/app/(components)/Navbar";
 import Sidebar from "@/app/(components)/Sidebar";
 import AuthGuard from "@/app/(components)/AuthGuard";
+import { ConfirmProvider } from "@/app/(components)/crud/confirm";
 import { useAppSelector } from "@/app/redux";
 import { useNotificationSocket } from "@/state/tageTypes/lib/useNotificationSocket";
 
@@ -31,6 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <AuthGuard>
+      <ConfirmProvider>
       <div
         className="flex w-full min-h-screen"
         style={{ background: "var(--color-bg)", color: "var(--color-text-primary)" }}
@@ -52,6 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+      </ConfirmProvider>
     </AuthGuard>
   );
 }

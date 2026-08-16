@@ -20,8 +20,10 @@ import {
   useUpdateCategoryMutation,
 } from "@/state/tageTypes/services/inventoryApi";
 import type { CategoryResponse } from "@/state/types/inventory";
+import { useConfirm } from "@/app/(components)/crud/confirm";
 
 export default function CategoriesPage() {
+  const confirm = useConfirm();
   const { data: categories, isLoading, error: loadError } = useGetCategoriesQuery();
   const { data: products } = useGetProductsQuery();
   const [createCategory, { isLoading: creating }] = useCreateCategoryMutation();
@@ -91,7 +93,12 @@ export default function CategoriesPage() {
     const warning = count
       ? `“${c.category_name}” still has ${count} product${count === 1 ? "" : "s"}. Delete anyway?`
       : `Delete category “${c.category_name}”?`;
-    if (!window.confirm(warning)) return;
+    const ok = await confirm({
+      title: `Delete ${c.category_name}`,
+      message: warning,
+      confirmLabel: "Delete category",
+    });
+    if (!ok) return;
     setPageError(null);
     try {
       await deleteCategory(c.category_id).unwrap();

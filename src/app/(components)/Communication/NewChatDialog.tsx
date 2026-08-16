@@ -54,7 +54,8 @@ export default function NewChatDialog({
   const toggleMember = (userId: number) =>
     setMemberUserIds((prev) => {
       const next = new Set(prev);
-      next.has(userId) ? next.delete(userId) : next.add(userId);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
       return next;
     });
 

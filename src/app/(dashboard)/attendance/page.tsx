@@ -34,7 +34,6 @@ import {
   useGetTodaySummaryQuery,
 } from "@/state/tageTypes/services/attendanceApi";
 import type { AttendanceResponse } from "@/state/types/attendance";
-import { white } from "tailwindcss/colors";
 
 type Tab = "mine" | "manager";
 

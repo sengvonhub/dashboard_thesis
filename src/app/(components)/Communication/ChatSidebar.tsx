@@ -72,7 +72,7 @@ export default function ChatSidebar({
           className="text-[11px] px-3 py-1.5 border-b"
           style={{ color: "var(--color-warning)", borderColor: "var(--color-divider)" }}
         >
-          "My chats" failed to load — showing every company group instead.
+          {'"My chats" failed to load — showing every company group instead.'}
         </p>
       )}
 

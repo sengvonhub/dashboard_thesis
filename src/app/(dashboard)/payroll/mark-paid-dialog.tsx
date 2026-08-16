@@ -30,8 +30,9 @@ export function MarkPaidDialog({ open, onOpenChange, salary }: Props) {
       toast.success("Marked as paid");
       onOpenChange(false);
       setPaymentDate("");
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? "Could not mark as paid");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { detail?: string } };
+      toast.error(apiErr?.data?.detail ?? "Could not mark as paid");
     }
   };
 

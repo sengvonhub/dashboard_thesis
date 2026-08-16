@@ -52,8 +52,9 @@ export function AdjustmentsDialog({ open, onOpenChange, salary }: Props) {
       }).unwrap();
       toast.success(type === "bonus" ? "Bonus added" : "Deduction applied");
       resetForm();
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? "Could not add adjustment");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { detail?: string } };
+      toast.error(apiErr?.data?.detail ?? "Could not add adjustment");
     }
   };
 
@@ -61,8 +62,9 @@ export function AdjustmentsDialog({ open, onOpenChange, salary }: Props) {
     try {
       await deleteAdjustment({ adjustmentId, salaryId: salary.salary_id }).unwrap();
       toast.success("Adjustment removed");
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? "Could not remove adjustment");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { detail?: string } };
+      toast.error(apiErr?.data?.detail ?? "Could not remove adjustment");
     }
   };
 

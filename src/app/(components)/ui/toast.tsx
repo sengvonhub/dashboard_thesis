@@ -22,11 +22,11 @@ function toDisplayMessage(message: unknown): string {
   if (typeof message === "string") return message;
   if (Array.isArray(message)) {
     return message
-      .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as any).msg) : String(item)))
+      .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as Record<string, unknown>).msg) : String(item)))
       .join("; ");
   }
   if (message && typeof message === "object" && "msg" in message) {
-    return String((message as any).msg);
+    return String((message as Record<string, unknown>).msg);
   }
   return "Something went wrong";
 }

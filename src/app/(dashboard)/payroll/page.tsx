@@ -93,8 +93,9 @@ async function downloadMonthlyReport(
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  } catch (err: any) {
-    toast.error(err?.message ?? "Failed to download report");
+  } catch (err: unknown) {
+    const apiErr = err as { message?: string };
+    toast.error(apiErr?.message ?? "Failed to download report");
   }
 }
 
@@ -220,8 +221,9 @@ export default function PayrollPage() {
         staffId: deleteTarget.staff_id,
       }).unwrap();
       toast.success("Salary record deleted");
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? "Could not delete record");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { detail?: string } };
+      toast.error(apiErr?.data?.detail ?? "Could not delete record");
     } finally {
       setDeleteTarget(null);
     }

@@ -101,8 +101,9 @@ export function SalaryFormDialog({ open, onOpenChange, salary }: Props) {
         toast.success("Salary record created");
       }
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? "Something went wrong");
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { detail?: string } };
+      toast.error(apiErr?.data?.detail ?? "Something went wrong");
     }
   };
 
@@ -204,7 +205,7 @@ export function SalaryFormDialog({ open, onOpenChange, salary }: Props) {
         </div>
         {!isEdit && roleBaseSalary === null && form.staff_id && (
           <p className="text-xs text-destructive -mt-2">
-            This staff member's role has no base salary set. Set one on the
+            This staff member&apos;s role has no base salary set. Set one on the
             role before creating a salary record.
           </p>
         )}

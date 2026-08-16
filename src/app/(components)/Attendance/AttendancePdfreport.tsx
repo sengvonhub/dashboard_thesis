@@ -80,6 +80,6 @@ export default function DownloadReportButton({
   );
 }
 
-function downloadAttendanceReportPdf(arg0: { records: AttendanceResponse[]; month: number; year: number; staffName: string | undefined; companyName: string | undefined; }) {
+function downloadAttendanceReportPdf(_arg0: { records: AttendanceResponse[]; month: number; year: number; staffName: string | undefined; companyName: string | undefined; }) {
     throw new Error("Function not implemented.");
 }

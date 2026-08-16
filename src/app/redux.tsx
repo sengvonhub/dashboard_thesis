@@ -102,7 +102,6 @@ const persistorRef = useRef<ReturnType<typeof persistStore> | undefined>(undefin
     persistorRef.current = persistStore(storeRef.current);
     appPersistor = persistorRef.current;
   }
-
   return (
     <Provider store={storeRef.current}>
       <PersistGate loading={null} persistor={persistorRef.current!}>

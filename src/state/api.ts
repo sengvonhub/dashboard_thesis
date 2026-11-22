@@ -19,13 +19,14 @@ import type { RootState as AppRootState } from "@/app/redux";
 // ---------------------------------------------------------------------------
 
 const AUTH_ENDPOINTS = ["/auth/login", "/auth/refresh"];
+
 const isAuthEndpoint = (args: string | FetchArgs) => {
   const url = typeof args === "string" ? args : args.url;
   return AUTH_ENDPOINTS.some((endpoint) => url === endpoint || url.endsWith(endpoint));
 };
 
 // ---------------------------------------------------------------------------
-// 
+// read prodcution url
 // ---------------------------------------------------------------------------
 
 const createRawBaseQuery = (skipAuthHeader: boolean) =>
@@ -43,8 +44,6 @@ const rawBaseQuery = createRawBaseQuery(false);
 const rawBaseQueryNoAuth = createRawBaseQuery(true);
 
 // ---------------------------------------------------------------------------
-// 
-// ---------------------------------------------------------------------------
 
 /**
  * Shared in-flight refresh. Without this, N requests failing with 401 at the
@@ -54,7 +53,8 @@ const rawBaseQueryNoAuth = createRawBaseQuery(true);
  * promise instead.
  */
 
-
+// ---------------------------------------------------------------------------
+// 
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -129,7 +129,6 @@ export const api = createApi({
   ],
   endpoints: () => ({}),
 });
-
 
 // ---------------------------------------------------------------------------
 // 
